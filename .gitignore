@@ -1,0 +1,16 @@
+# Python virtual environments & bytecode
+venv/
+.venv/
+backend/venv/
+backend/.venv/
+__pycache__/
+*.py[cod]
+
+# Local SQLite database & environment files
+backend/data/*.db
+backend/data/*.db-journal
+.env
+
+# OS & IDE files
+.DS_Store
+Thumbs.db
