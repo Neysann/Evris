@@ -1,6 +1,6 @@
 # E.V.R.I.S. — Local Personal AI & Polymath Assistant
 
-**E.V.R.I.S.** (*Environment for Voice, Robotics & Intelligent Systems*) is a 100% local, privacy-first personal AI assistant inspired by **J.A.R.V.I.S.**, using a **Dual-Model Complexity Router** powered by Ollama:
+**E.V.R.I.S.** is a 100% local, privacy-first personal AI assistant inspired by **J.A.R.V.I.S.**, using a **Dual-Model Complexity Router** powered by Ollama:
 - **FAST Model (`qwen2.5:3b`)**: Instant responses for everyday questions and quick commands.
 - **PRO Model (`qwen2.5:7b`)**: Deep polymath reasoning across **Science, Finance, Computer Science, and Strategy**.
 
