@@ -37,6 +37,17 @@ class MemoryStore:
                 conn.execute("ALTER TABLE messages ADD COLUMN tier_used TEXT")
             if "latency_ms" not in cols:
                 conn.execute("ALTER TABLE messages ADD COLUMN latency_ms INTEGER")
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
             conn.commit()
 
     def add_message(
@@ -77,6 +88,48 @@ class MemoryStore:
     def clear_messages(self) -> None:
         with self._get_conn() as conn:
             conn.execute("DELETE FROM messages")
+            conn.commit()
+
+    # Long-Term Fact Memory
+    def add_memory(self, category: str, content: str) -> Dict[str, Any]:
+        now = datetime.now().isoformat(timespec="seconds")
+        with self._get_conn() as conn:
+            # Avoid exact duplicates
+            existing = conn.execute(
+                "SELECT * FROM memories WHERE LOWER(content) = LOWER(?)",
+                (content.strip(),),
+            ).fetchone()
+            if existing:
+                return dict(existing)
+
+            cursor = conn.execute(
+                "INSERT INTO memories (category, content, created_at) VALUES (?, ?, ?)",
+                (category.strip().lower(), content.strip(), now),
+            )
+            conn.commit()
+            return {
+                "id": cursor.lastrowid,
+                "category": category.strip().lower(),
+                "content": content.strip(),
+                "created_at": now,
+            }
+
+    def get_memories(self, limit: int = 50) -> List[Dict[str, Any]]:
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM memories ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def delete_memory(self, memory_id: int) -> bool:
+        with self._get_conn() as conn:
+            cursor = conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def clear_memories(self) -> None:
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM memories")
             conn.commit()
 
 
