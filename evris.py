@@ -80,17 +80,22 @@ async def print_banner() -> None:
         f"Memories={BOLD}{mem_count}{RESET}"
     )
     print(f"{DIM}------------------------------------------------------------{RESET}")
-    print(f" {DIM}Commands:{RESET}")
-    print(f"   {CYAN}/mode auto|fast|pro{RESET}  - Switch routing mode")
-    print(f"   {CYAN}/pro on|off{RESET}          - Toggle Pro model availability (test refusal)")
-    print(f"   {CYAN}/ram [gb]{RESET}            - Check or set Pro RAM safety threshold (e.g. /ram 3.0)")
-    print(f"   {CYAN}/memories{RESET}            - List saved long-term facts")
-    print(f"   {CYAN}/forget <id|all>{RESET}     - Delete a saved memory (or all)")
-    print(f"   {CYAN}/tools{RESET}               - List autonomous agent tools")
-    print(f"   {CYAN}/status{RESET}              - Show system & model status")
-    print(f"   {CYAN}/clear{RESET}               - Clear conversation history")
-    print(f"   {CYAN}/exit{RESET}                - Quit Evris")
+    print(f" {DIM}Type {CYAN}/help{DIM} to show available commands.{RESET}")
     print(f"{CYAN}{BOLD}============================================================{RESET}\n")
+
+
+def print_commands() -> None:
+    print(f"\n{CYAN}{BOLD}Available Commands:{RESET}")
+    print(f"  {CYAN}/help{RESET}                - Show this command list")
+    print(f"  {CYAN}/status{RESET}              - Show live system & model monitoring")
+    print(f"  {CYAN}/mode auto|fast|pro{RESET}  - Switch routing mode")
+    print(f"  {CYAN}/pro on|off{RESET}          - Toggle Pro model availability (test refusal)")
+    print(f"  {CYAN}/ram [gb]{RESET}            - Check or set Pro RAM safety threshold (e.g. /ram 3.0)")
+    print(f"  {CYAN}/memories{RESET}            - List saved long-term facts")
+    print(f"  {CYAN}/forget <id|all>{RESET}     - Delete a saved memory (or all)")
+    print(f"  {CYAN}/tools{RESET}               - List autonomous agent tools")
+    print(f"  {CYAN}/clear{RESET}               - Clear conversation history")
+    print(f"  {CYAN}/exit{RESET}                - Quit Evris\n")
 
 
 async def repl() -> None:
@@ -116,6 +121,9 @@ async def repl() -> None:
             if cmd in ("/exit", "/quit"):
                 print(f"{DIM}Shutting down Evris.{RESET}")
                 break
+            elif cmd in ("/help", "/commands"):
+                print_commands()
+                continue
             elif cmd == "/clear":
                 memory_store.clear_messages()
                 print(f"{GREEN}✓ Conversation history cleared (long-term memories preserved).{RESET}\n")
@@ -190,7 +198,7 @@ async def repl() -> None:
                 continue
             else:
                 print(
-                    f"{RED}Unknown command. Use /mode, /pro, /ram, /memories, /forget, /tools, /status, /clear, or /exit.{RESET}\n"
+                    f"{RED}Unknown command. Type /help to see all available commands.{RESET}\n"
                 )
                 continue
 
