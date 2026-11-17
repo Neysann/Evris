@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 740" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0c1017"/>
+      <stop offset="100%" stop-color="#070a0f"/>
+    </linearGradient>
+    <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Outer Window Frame -->
+  <rect x="10" y="10" width="900" height="720" rx="10" fill="url(#bgGrad)" stroke="#1f2937" stroke-width="1.5" filter="url(#shadow)"/>
+
+  <!-- Windows Terminal Title Bar -->
+  <path d="M 10 20 Q 10 10 20 10 L 900 10 Q 910 10 910 20 L 910 46 L 10 46 Z" fill="#161b22"/>
+  <line x1="10" y1="46" x2="910" y2="46" stroke="#21262d" stroke-width="1"/>
+
+  <!-- Active Tab -->
+  <path d="M 24 46 L 24 22 Q 24 16 30 16 L 210 16 Q 216 16 216 22 L 216 46 Z" fill="#0c1017"/>
+  <text x="44" y="35" fill="#00e5ff" font-family="Consolas, 'Cascadia Mono', monospace" font-size="13" font-weight="bold">⚡ E.V.R.I.S.</text>
+  <text x="194" y="35" fill="#8b949e" font-family="Consolas, monospace" font-size="12">×</text>
+
+  <!-- Window Controls (Right) -->
+  <circle cx="840" cy="28" r="5" fill="#30363d"/>
+  <circle cx="862" cy="28" r="5" fill="#30363d"/>
+  <circle cx="884" cy="28" r="5" fill="#f85149"/>
+
+  <!-- Terminal Content -->
+  <g font-family="Consolas, 'Cascadia Mono', 'Courier New', monospace" font-size="13.2">
+    <!-- Banner -->
+    <text x="28" y="74" fill="#00e5ff" font-weight="bold">============================================================</text>
+    <text x="28" y="93" fill="#00e5ff" font-weight="bold">   E.V.R.I.S. — Terminal Interface (Dual-Model + Tools)</text>
+    <text x="28" y="112" fill="#00e5ff" font-weight="bold">============================================================</text>
+
+    <text x="28" y="132" fill="#6e7681"> System: <tspan fill="#e6edf3">CPU 6.4% | RAM 8.20/16.00 GB (7.80 GB free)</tspan></text>
+    <text x="28" y="151" fill="#6e7681"> Models: <tspan fill="#e6edf3">FAST=</tspan><tspan fill="#00e5ff">qwen2.5:3b</tspan><tspan fill="#e6edf3"> | PRO=</tspan><tspan fill="#ffb300">qwen2.5:7b</tspan><tspan fill="#e6edf3"> (</tspan><tspan fill="#00e676">ONLINE</tspan><tspan fill="#e6edf3">) | Mode=</tspan><tspan fill="#ffffff" font-weight="bold">AUTO</tspan><tspan fill="#e6edf3"> | Memories=</tspan><tspan fill="#ffffff" font-weight="bold">2</tspan></text>
+    <text x="28" y="170" fill="#6e7681">------------------------------------------------------------</text>
+    <text x="28" y="189" fill="#6e7681"> Commands:</text>
+    <text x="28" y="208" fill="#00e5ff">   /mode auto|fast|pro  <tspan fill="#8b949e">- Switch routing mode</tspan></text>
+    <text x="28" y="226" fill="#00e5ff">   /pro on|off          <tspan fill="#8b949e">- Toggle Pro model availability (test refusal)</tspan></text>
+    <text x="28" y="244" fill="#00e5ff">   /memories            <tspan fill="#8b949e">- List saved long-term facts</tspan></text>
+    <text x="28" y="262" fill="#00e5ff">   /forget &lt;id|all&gt;     <tspan fill="#8b949e">- Delete a saved memory (or all)</tspan></text>
+    <text x="28" y="280" fill="#00e5ff">   /tools               <tspan fill="#8b949e">- List autonomous agent tools</tspan></text>
+    <text x="28" y="298" fill="#00e5ff">   /status              <tspan fill="#8b949e">- Show system &amp; model status</tspan></text>
+    <text x="28" y="316" fill="#00e5ff">   /clear               <tspan fill="#8b949e">- Clear conversation history</tspan></text>
+    <text x="28" y="334" fill="#00e5ff">   /exit                <tspan fill="#8b949e">- Quit Evris</tspan></text>
+    <text x="28" y="353" fill="#00e5ff" font-weight="bold">============================================================</text>
+
+    <!-- Interaction 1: Fast Query -->
+    <text x="28" y="382" fill="#ffffff" font-weight="bold">You &gt; <tspan font-weight="normal" fill="#e6edf3">Remember that my target workstation is a ThinkPad P16s Gen 2 with 16GB RAM</tspan></text>
+    <text x="28" y="401" fill="#6e7681">→ Routing to <tspan fill="#00e5ff">FAST [GENERAL] (qwen2.5:3b)</tspan>...</text>
+    <text x="28" y="420" fill="#00e676">  ⚡ Tool [save_memory]: Saved to long-term memory [user_fact]: my target workstation is a ThinkPad P16s Gen 2 with 16GB RAM</text>
+    <text x="28" y="445" fill="#ffffff" font-weight="bold">EVRIS <tspan fill="#00e5ff" font-weight="normal">[FAST • GENERAL • qwen2.5:3b • 340 ms]</tspan></text>
+    <text x="28" y="464" fill="#c9d1d9">Noted and committed to permanent memory. All future resource thresholds will account for your 16 GB ThinkPad P16s Gen 2.</text>
+
+    <!-- Interaction 2: Pro Finance + Math Tools -->
+    <text x="28" y="498" fill="#ffffff" font-weight="bold">You &gt; <tspan font-weight="normal" fill="#e6edf3">Check the current price of BTC-USD and calculate $10,000 compounded at 8% for 10 years.</tspan></text>
+    <text x="28" y="517" fill="#6e7681">→ Routing to <tspan fill="#ffb300">PRO [FINANCE] (qwen2.5:7b)</tspan>...</text>
+    <text x="28" y="536" fill="#00e676">  ⚡ Tool [get_market_quote]: BTC-USD: 64360.04 USD (-12.99%)</text>
+    <text x="28" y="555" fill="#00e676">  ⚡ Tool [calculate_math]: 10000 * (1 + 0.08)**10 = 21589.25</text>
+    <text x="28" y="580" fill="#ffffff" font-weight="bold">EVRIS <tspan fill="#ffb300" font-weight="normal">[PRO • FINANCE • qwen2.5:7b • 1180 ms]</tspan></text>
+    <text x="28" y="599" fill="#c9d1d9">Bitcoin (BTC-USD) is currently trading at $64,360.04 USD (-12.99% vs. previous close). Meanwhile, $10,000</text>
+    <text x="28" y="618" fill="#c9d1d9">compounded annually at 8% over 10 years yields $21,589.25—a net capital gain of $11,589.25 (+115.89%).</text>
+
+    <!-- Interaction 3: Offline Pro Refusal Test -->
+    <text x="28" y="652" fill="#ffffff" font-weight="bold">You &gt; <tspan font-weight="normal" fill="#e6edf3">/pro off</tspan></text>
+    <text x="28" y="671" fill="#c9d1d9">✓ Pro Node state set to: <tspan fill="#ff5252" font-weight="bold">OFFLINE</tspan></text>
+    <text x="28" y="694" fill="#ffffff" font-weight="bold">You &gt; <tspan font-weight="normal" fill="#e6edf3">Explain quantum entanglement from first principles</tspan></text>
+    <text x="28" y="713" fill="#ff5252">[REFUSED • SCIENCE • qwen2.5:7b OFFLINE] <tspan fill="#c9d1d9">This complex task requires the Pro model, which is currently offline.</tspan></text>
+  </g>
+</svg>
