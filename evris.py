@@ -370,23 +370,11 @@ def print_commands() -> None:
     console.print()
 
 
-async def print_live_prompt_bar() -> None:
-    """Show a compact live telemetry bar above the user prompt."""
-    status = await model_router.get_models_status()
-    cpu = psutil.cpu_percent(interval=None)
-    free_gb = status["free_ram_gb"]
-    loaded = [
-        info["model"]
-        for info in (status["fast"], status["pro"], status["limitless"])
-        if info.get("loaded")
-    ]
-    loaded_str = ", ".join(loaded) if loaded else "none"
-    mode = status["routing_mode"].upper()
-    mode_color = TIER_STYLES.get(status["routing_mode"], "cyan")
-    console.print(
-        f"[dim]┌─[/dim] [{mode_color}]MODE:{mode}[/{mode_color}] "
-        f"[dim]| CPU {cpu:.0f}% | RAM {free_gb:.1f} GB free | Loaded: {loaded_str}[/dim]"
-    )
+def print_live_prompt_bar() -> None:
+    """Show the active routing mode above the user prompt."""
+    mode = model_router.routing_mode.upper()
+    mode_color = TIER_STYLES.get(model_router.routing_mode, "cyan")
+    console.print(f"[dim]┌─[/dim] [{mode_color}]MODE:{mode}[/{mode_color}]")
 
 
 async def repl() -> None:
@@ -398,7 +386,7 @@ async def repl() -> None:
 
     while True:
         try:
-            await print_live_prompt_bar()
+            print_live_prompt_bar()
             user_input = console.input("[bold white]└─ You > [/bold white]").lstrip("\ufeff").strip()
         except (EOFError, KeyboardInterrupt):
             console.print("\n[dim]Shutting down Evris.[/dim]")
