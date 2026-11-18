@@ -1,9 +1,9 @@
 # E.V.R.I.S. — Local Personal AI & Polymath Assistant
 
-**E.V.R.I.S.** is a 100% local, privacy-first personal AI assistant and autonomous PC agent inspired by **J.A.R.V.I.S.**, using a **Multi-Model Complexity & Domain Router** powered by Ollama:
-- **FAST Model (`qwen3.5:4b`)**: Instant responses for everyday questions, status checks, and quick PC commands.
-- **PRO Model (`qwen3.5:9b`)**: Deep polymath reasoning across **Science, Finance, Computer Science, and Strategy**, sized specifically for a **16 GB RAM** workstation (**Lenovo ThinkPad P16s Gen 2**).
-- **LIMITLESS Mode (`huihui_ai/qwen3.5-abliterated:9b`)**: Uncensored, refusal-removed Qwen 3.5 model (`/mode limitless`) for unrestricted questions without safety refusals or moralizing.
+**E.V.R.I.S.** is a 100% local, privacy-first personal AI assistant and autonomous PC agent inspired by **J.A.R.V.I.S.**, using a **3-Tier Multi-Model Complexity & Domain Router** powered by Ollama and a **Rich live-streaming terminal interface**:
+- **FAST Model (`qwen3.5:4b`)** *(Cyan)*: Instant responses for everyday questions, status checks, and quick PC commands.
+- **PRO Model (`qwen3.5:9b`)** *(Yellow/Amber)*: Deep polymath reasoning across **Science, Finance, Computer Science, and Strategy**, sized for a **32 GB RAM + RTX 5060 (8 GB VRAM)** workstation.
+- **LIMITLESS Mode (`huihui_ai/qwen3.5-abliterated:9b`)** *(Magenta)*: Uncensored, refusal-removed Qwen 3.5 model (`/mode limitless`, or auto-escalated in `/mode auto` if `FAST`/`PRO` refuses) for unrestricted answers without safety refusals or moralizing.
 
 ---
 
@@ -15,12 +15,13 @@
 
 ## Key Features & Options Available
 
-### 1. Automatic Domain & Complexity Routing (`backend/app/core/router.py`)
-Every prompt is automatically analyzed before inference starts:
-- **`FAST [GENERAL]`**: Short conversational prompts and quick actions are routed to `qwen3.5:4b` for fast responses.
-- **`PRO [FINANCE | SCIENCE | TECH | STRATEGY]`**: Specialist domain questions, code generation, and complex analytical prompts are routed to `qwen3.5:9b` with domain-specific first-principles framing.
-- **`LIMITLESS` (`/mode limitless`)**: Routes all prompts directly to `huihui_ai/qwen3.5-abliterated:9b` with uncensored system framing.
-- **Strict Offline Refusal**: If a complex **Pro** or **Limitless** task is requested while the node is offline or free RAM is below the guardrail, Evris refuses cleanly rather than hallucinating on a smaller model.
+### 1. Dynamic Terminal UI & 3-Way Auto Routing (`evris.py`, `backend/app/core/router.py`)
+- **Live Streaming & Color-Coded Mode Panels**: Responses stream token-by-token inside Rich Markdown panels color-coded by active tier (**Cyan** = `FAST`, **Amber** = `PRO`, **Magenta** = `LIMITLESS`, **Red** = `REFUSED`) with a 12 FPS spinner, elapsed timer, and live `tok/s` speed.
+- **`FAST [GENERAL]`**: Short conversational prompts and quick actions route to `qwen3.5:4b`.
+- **`PRO [FINANCE | SCIENCE | TECH | STRATEGY]`**: Specialist domain questions, code generation, and complex analytical prompts route to `qwen3.5:9b` with domain-specific first-principles framing.
+- **`LIMITLESS`**: Triggered manually (`/mode limitless`), proactively on uncensored/sensitive keywords, or automatically in `/mode auto` when `FAST`/`PRO` returns a safety refusal.
+- **Smart Security Confirmation & RAM Guardrail**: Launches any installed app/shortcut without a restrictive whitelist while prompting `[y/N]` for risky scripts/shells or sensitive files (`.env`, `.ssh`, etc.), and checks `pro_min_free_ram_gb` (`5.5 GB`) before loading 9B models.
+- **Persistent Settings & Logging**: Mode, Pro availability, RAM threshold, and confirmation toggle persist across restarts in SQLite; diagnostics log to `backend/data/evris.log`.
 
 ### 2. Interactive Terminal Commands (`evris.py`)
 
@@ -31,6 +32,8 @@ Every prompt is automatically analyzed before inference starts:
 | `/mode pro` | Force all prompts to use the **PRO** model (`qwen3.5:9b`) |
 | `/mode limitless` | Force all prompts to use the uncensored **LIMITLESS** model (`huihui_ai/qwen3.5-abliterated:9b`) |
 | `/pro on` \| `/pro off` | Toggle the **PRO** model node online/offline to test strict refusal behavior |
+| `/confirm on` \| `/confirm off` | Toggle smart `[y/N]` security confirmations for risky scripts or sensitive files |
+| `/ram [gb]` | Check or set the heavy-model RAM safety threshold (e.g. `/ram 5.5`) |
 | `/memories` | List all permanent facts stored in long-term SQLite memory |
 | `/forget <id\|all>` | Delete a specific long-term memory by ID or clear all stored facts |
 | `/tools` | Display all autonomous tools registered with the agent |
@@ -49,6 +52,7 @@ Every prompt is automatically analyzed before inference starts:
 | `get_system_report` | Inspects live CPU load, free RAM, disk space, battery, and top RAM-consuming processes | *"Give me a full system report and top processes"* |
 | `read_local_file` | Reads and summarizes local code or text files on your computer | *"Read README.md and summarize it"* |
 | `list_directory` | Lists files and folders inside any local directory | *"List the files in backend/app"* |
+| `web_search` | Searches the live web via DuckDuckGo for current facts or documentation | *"Search the latest Python 3.13 release notes"* |
 
 ---
 

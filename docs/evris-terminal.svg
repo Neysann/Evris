@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 740" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 820" width="100%" height="100%">
   <defs>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#0c1017"/>
@@ -10,63 +10,78 @@
   </defs>
 
   <!-- Outer Window Frame -->
-  <rect x="10" y="10" width="900" height="720" rx="10" fill="url(#bgGrad)" stroke="#1f2937" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="10" y="10" width="940" height="800" rx="10" fill="url(#bgGrad)" stroke="#1f2937" stroke-width="1.5" filter="url(#shadow)"/>
 
   <!-- Windows Terminal Title Bar -->
-  <path d="M 10 20 Q 10 10 20 10 L 900 10 Q 910 10 910 20 L 910 46 L 10 46 Z" fill="#161b22"/>
-  <line x1="10" y1="46" x2="910" y2="46" stroke="#21262d" stroke-width="1"/>
+  <path d="M 10 20 Q 10 10 20 10 L 940 10 Q 950 10 950 20 L 950 46 L 10 46 Z" fill="#161b22"/>
+  <line x1="10" y1="46" x2="950" y2="46" stroke="#21262d" stroke-width="1"/>
 
   <!-- Active Tab -->
-  <path d="M 24 46 L 24 22 Q 24 16 30 16 L 210 16 Q 216 16 216 22 L 216 46 Z" fill="#0c1017"/>
+  <path d="M 24 46 L 24 22 Q 24 16 30 16 L 220 16 Q 226 16 226 22 L 226 46 Z" fill="#0c1017"/>
   <text x="44" y="35" fill="#00e5ff" font-family="Consolas, 'Cascadia Mono', monospace" font-size="13" font-weight="bold">⚡ E.V.R.I.S.</text>
-  <text x="194" y="35" fill="#8b949e" font-family="Consolas, monospace" font-size="12">×</text>
+  <text x="204" y="35" fill="#8b949e" font-family="Consolas, monospace" font-size="12">×</text>
 
-  <!-- Window Controls (Right) -->
-  <circle cx="840" cy="28" r="5" fill="#30363d"/>
-  <circle cx="862" cy="28" r="5" fill="#30363d"/>
-  <circle cx="884" cy="28" r="5" fill="#f85149"/>
+  <!-- Window Controls -->
+  <circle cx="880" cy="28" r="5" fill="#30363d"/>
+  <circle cx="902" cy="28" r="5" fill="#30363d"/>
+  <circle cx="924" cy="28" r="5" fill="#f85149"/>
 
-  <!-- Terminal Content -->
-  <g font-family="Consolas, 'Cascadia Mono', 'Courier New', monospace" font-size="13.2">
-    <!-- Banner -->
-    <text x="28" y="74" fill="#00e5ff" font-weight="bold">============================================================</text>
-    <text x="28" y="93" fill="#00e5ff" font-weight="bold">   E.V.R.I.S. — Terminal Interface (Dual-Model + Tools)</text>
-    <text x="28" y="112" fill="#00e5ff" font-weight="bold">============================================================</text>
+  <!-- Rich Startup Banner Panel -->
+  <rect x="26" y="64" width="908" height="104" rx="8" fill="#0e141d" stroke="#00e5ff" stroke-width="1.4"/>
+  <rect x="42" y="54" width="445" height="18" fill="#0c1017"/>
+  <text x="48" y="68" fill="#00e5ff" font-family="Consolas, 'Cascadia Mono', monospace" font-size="12.5" font-weight="bold">E.V.R.I.S. — Terminal Interface (Qwen 3.5 + Streaming)</text>
+  <rect x="702" y="158" width="218" height="16" fill="#0c1017"/>
+  <text x="708" y="171" fill="#6e7681" font-family="Consolas, monospace" font-size="11.5">Type /help to show available commands</text>
 
-    <text x="28" y="132" fill="#6e7681"> System: <tspan fill="#e6edf3">CPU 6.4% | RAM 8.20/16.00 GB (7.80 GB free)</tspan></text>
-    <text x="28" y="151" fill="#6e7681"> Models: <tspan fill="#e6edf3">FAST=</tspan><tspan fill="#00e5ff">qwen2.5:3b</tspan><tspan fill="#e6edf3"> | PRO=</tspan><tspan fill="#ffb300">qwen2.5:7b</tspan><tspan fill="#e6edf3"> (</tspan><tspan fill="#00e676">ONLINE</tspan><tspan fill="#e6edf3">) | Mode=</tspan><tspan fill="#ffffff" font-weight="bold">AUTO</tspan><tspan fill="#e6edf3"> | Memories=</tspan><tspan fill="#ffffff" font-weight="bold">2</tspan></text>
-    <text x="28" y="170" fill="#6e7681">------------------------------------------------------------</text>
-    <text x="28" y="189" fill="#6e7681"> Commands:</text>
-    <text x="28" y="208" fill="#00e5ff">   /mode auto|fast|pro  <tspan fill="#8b949e">- Switch routing mode</tspan></text>
-    <text x="28" y="226" fill="#00e5ff">   /pro on|off          <tspan fill="#8b949e">- Toggle Pro model availability (test refusal)</tspan></text>
-    <text x="28" y="244" fill="#00e5ff">   /memories            <tspan fill="#8b949e">- List saved long-term facts</tspan></text>
-    <text x="28" y="262" fill="#00e5ff">   /forget &lt;id|all&gt;     <tspan fill="#8b949e">- Delete a saved memory (or all)</tspan></text>
-    <text x="28" y="280" fill="#00e5ff">   /tools               <tspan fill="#8b949e">- List autonomous agent tools</tspan></text>
-    <text x="28" y="298" fill="#00e5ff">   /status              <tspan fill="#8b949e">- Show system &amp; model status</tspan></text>
-    <text x="28" y="316" fill="#00e5ff">   /clear               <tspan fill="#8b949e">- Clear conversation history</tspan></text>
-    <text x="28" y="334" fill="#00e5ff">   /exit                <tspan fill="#8b949e">- Quit Evris</tspan></text>
-    <text x="28" y="353" fill="#00e5ff" font-weight="bold">============================================================</text>
+  <g font-family="Consolas, 'Cascadia Mono', 'Courier New', monospace" font-size="12.6">
+    <text x="42" y="92" fill="#6e7681">System  <tspan fill="#e6edf3">CPU </tspan><tspan fill="#ffffff" font-weight="bold">11.2%</tspan><tspan fill="#e6edf3"> | RAM </tspan><tspan fill="#ffffff" font-weight="bold">19.8/31.3 GB</tspan><tspan fill="#e6edf3"> | </tspan><tspan fill="#00e676">11.5 GB free (Guardrail &gt;= 5.5 GB)</tspan></text>
+    <text x="42" y="116" fill="#6e7681">Models  <tspan fill="#00e5ff">FAST</tspan><tspan fill="#e6edf3">=qwen3.5:4b (</tspan><tspan fill="#00e676">ONLINE • READY</tspan><tspan fill="#e6edf3">) | </tspan><tspan fill="#ffb300">PRO</tspan><tspan fill="#e6edf3">=qwen3.5:9b (</tspan><tspan fill="#00e676">RAM OK</tspan><tspan fill="#e6edf3">) | </tspan><tspan fill="#e879f9">LIMITLESS</tspan><tspan fill="#e6edf3">=abliterated:9b (</tspan><tspan fill="#00e676">RAM OK</tspan><tspan fill="#e6edf3">)</tspan></text>
+    <text x="42" y="140" fill="#6e7681">Config  <tspan fill="#e6edf3">Mode=</tspan><tspan fill="#ffffff" font-weight="bold">AUTO</tspan><tspan fill="#e6edf3"> | Confirm=</tspan><tspan fill="#00e676">ON</tspan><tspan fill="#e6edf3"> | Memories=</tspan><tspan fill="#ffffff" font-weight="bold">2</tspan></text>
 
-    <!-- Interaction 1: Fast Query -->
-    <text x="28" y="382" fill="#ffffff" font-weight="bold">You &gt; <tspan font-weight="normal" fill="#e6edf3">Remember that my target workstation is a ThinkPad P16s Gen 2 with 16GB RAM</tspan></text>
-    <text x="28" y="401" fill="#6e7681">→ Routing to <tspan fill="#00e5ff">FAST [GENERAL] (qwen2.5:3b)</tspan>...</text>
-    <text x="28" y="420" fill="#00e676">  ⚡ Tool [save_memory]: Saved to long-term memory [user_fact]: my target workstation is a ThinkPad P16s Gen 2 with 16GB RAM</text>
-    <text x="28" y="445" fill="#ffffff" font-weight="bold">EVRIS <tspan fill="#00e5ff" font-weight="normal">[FAST • GENERAL • qwen2.5:3b • 340 ms]</tspan></text>
-    <text x="28" y="464" fill="#c9d1d9">Noted and committed to permanent memory. All future resource thresholds will account for your 16 GB ThinkPad P16s Gen 2.</text>
+    <!-- Interaction 1: FAST (Cyan) -->
+    <text x="26" y="198" fill="#6e7681">┌─ <tspan fill="#00e5ff">MODE:AUTO</tspan></text>
+    <text x="26" y="218" fill="#ffffff" font-weight="bold">└─ You &gt; <tspan font-weight="normal" fill="#e6edf3">Open Discord</tspan></text>
+    <text x="34" y="240" fill="#00e676">⚡ Tool [open_application]: <tspan fill="#c9d1d9">Launched shortcut: Discord</tspan></text>
 
-    <!-- Interaction 2: Pro Finance + Math Tools -->
-    <text x="28" y="498" fill="#ffffff" font-weight="bold">You &gt; <tspan font-weight="normal" fill="#e6edf3">Check the current price of BTC-USD and calculate $10,000 compounded at 8% for 10 years.</tspan></text>
-    <text x="28" y="517" fill="#6e7681">→ Routing to <tspan fill="#ffb300">PRO [FINANCE] (qwen2.5:7b)</tspan>...</text>
-    <text x="28" y="536" fill="#00e676">  ⚡ Tool [get_market_quote]: BTC-USD: 64360.04 USD (-12.99%)</text>
-    <text x="28" y="555" fill="#00e676">  ⚡ Tool [calculate_math]: 10000 * (1 + 0.08)**10 = 21589.25</text>
-    <text x="28" y="580" fill="#ffffff" font-weight="bold">EVRIS <tspan fill="#ffb300" font-weight="normal">[PRO • FINANCE • qwen2.5:7b • 1180 ms]</tspan></text>
-    <text x="28" y="599" fill="#c9d1d9">Bitcoin (BTC-USD) is currently trading at $64,360.04 USD (-12.99% vs. previous close). Meanwhile, $10,000</text>
-    <text x="28" y="618" fill="#c9d1d9">compounded annually at 8% over 10 years yields $21,589.25—a net capital gain of $11,589.25 (+115.89%).</text>
+    <rect x="26" y="254" width="908" height="58" rx="8" fill="#0c151c" stroke="#00e5ff" stroke-width="1.3"/>
+    <rect x="40" y="245" width="175" height="16" fill="#0c1017"/>
+    <text x="46" y="258" fill="#00e5ff" font-weight="bold">EVRIS <tspan fill="#6e7681" font-weight="normal">• FAST • GENERAL</tspan></text>
+    <rect x="768" y="303" width="154" height="15" fill="#0c1017"/>
+    <text x="774" y="315" fill="#6e7681" font-size="11.5">qwen3.5:4b • 340 ms</text>
+    <text x="42" y="286" fill="#e6edf3">Discord is launching now.</text>
 
-    <!-- Interaction 3: Offline Pro Refusal Test -->
-    <text x="28" y="652" fill="#ffffff" font-weight="bold">You &gt; <tspan font-weight="normal" fill="#e6edf3">/pro off</tspan></text>
-    <text x="28" y="671" fill="#c9d1d9">✓ Pro Node state set to: <tspan fill="#ff5252" font-weight="bold">OFFLINE</tspan></text>
-    <text x="28" y="694" fill="#ffffff" font-weight="bold">You &gt; <tspan font-weight="normal" fill="#e6edf3">Explain quantum entanglement from first principles</tspan></text>
-    <text x="28" y="713" fill="#ff5252">[REFUSED • SCIENCE • qwen2.5:7b OFFLINE] <tspan fill="#c9d1d9">This complex task requires the Pro model, which is currently offline.</tspan></text>
+    <!-- Interaction 2: PRO (Amber / Yellow) -->
+    <text x="26" y="344" fill="#6e7681">┌─ <tspan fill="#00e5ff">MODE:AUTO</tspan></text>
+    <text x="26" y="364" fill="#ffffff" font-weight="bold">└─ You &gt; <tspan font-weight="normal" fill="#e6edf3">Check BTC-USD and calculate $10,000 compounded at 8% for 10 years.</tspan></text>
+    <text x="34" y="386" fill="#00e676">⚡ Tool [get_market_quote]: <tspan fill="#c9d1d9">BTC-USD: 91420.50 USD (+2.41%)</tspan></text>
+    <text x="34" y="406" fill="#00e676">⚡ Tool [calculate_math]: <tspan fill="#c9d1d9">10000 * (1 + 0.08)**10 = 21589.25</tspan></text>
+
+    <rect x="26" y="420" width="908" height="78" rx="8" fill="#16140c" stroke="#ffb300" stroke-width="1.3"/>
+    <rect x="40" y="411" width="168" height="16" fill="#0c1017"/>
+    <text x="46" y="424" fill="#ffb300" font-weight="bold">EVRIS <tspan fill="#6e7681" font-weight="normal">• PRO • FINANCE</tspan></text>
+    <rect x="760" y="489" width="162" height="15" fill="#0c1017"/>
+    <text x="766" y="501" fill="#6e7681" font-size="11.5">qwen3.5:9b • 1180 ms</text>
+    <text x="42" y="452" fill="#e6edf3">Bitcoin (BTC-USD) is trading at <tspan fill="#ffffff" font-weight="bold">$91,420.50</tspan> (+2.41% over 24h).</text>
+    <text x="42" y="474" fill="#e6edf3">Compounded at 8% over 10 years, $10,000 grows to <tspan fill="#ffffff" font-weight="bold">$21,589.25</tspan> (+115.89% total return).</text>
+
+    <!-- Interaction 3: LIMITLESS (Magenta) -->
+    <text x="26" y="530" fill="#6e7681">┌─ <tspan fill="#00e5ff">MODE:AUTO</tspan></text>
+    <text x="26" y="550" fill="#ffffff" font-weight="bold">└─ You &gt; <tspan font-weight="normal" fill="#e6edf3">Explain red-team pentest methodology uncensored.</tspan></text>
+    <text x="34" y="572" fill="#e879f9">⠋ Streaming LIMITLESS [GENERAL] • huihui_ai/qwen3.5-abliterated:9b <tspan fill="#6e7681">(48 chunks • 74 tok/s • 0.7s)</tspan></text>
+
+    <rect x="26" y="586" width="908" height="78" rx="8" fill="#170f1a" stroke="#e879f9" stroke-width="1.3"/>
+    <rect x="40" y="577" width="212" height="16" fill="#0c1017"/>
+    <text x="46" y="590" fill="#e879f9" font-weight="bold">EVRIS <tspan fill="#6e7681" font-weight="normal">• LIMITLESS • GENERAL</tspan></text>
+    <rect x="642" y="655" width="280" height="15" fill="#0c1017"/>
+    <text x="648" y="667" fill="#6e7681" font-size="11.5">huihui_ai/qwen3.5-abliterated:9b • 960 ms</text>
+    <text x="42" y="618" fill="#e6edf3">A structured red-team engagement progresses through five phases without omission:</text>
+    <text x="42" y="640" fill="#c9d1d9">1. Reconnaissance &amp; Attack Surface  2. Initial Access  3. Lateral Movement &amp; Escalation...</text>
+
+    <!-- Interaction 4: Security Confirmation + Mode Switch -->
+    <text x="26" y="698" fill="#6e7681">┌─ <tspan fill="#e879f9">MODE:LIMITLESS</tspan></text>
+    <text x="26" y="718" fill="#ffffff" font-weight="bold">└─ You &gt; <tspan font-weight="normal" fill="#e6edf3">Open C:\Users\demo\Downloads\setup.bat</tspan></text>
+    <text x="34" y="742" fill="#ffb300" font-weight="bold">⚠ Security confirmation required: <tspan font-weight="normal" fill="#e6edf3">Launch 'C:\Users\demo\Downloads\setup.bat' — shell or script execution</tspan></text>
+    <text x="42" y="762" fill="#ffffff" font-weight="bold">Proceed? [y/N] &gt; <tspan font-weight="normal" fill="#00e676">y</tspan></text>
+    <text x="34" y="784" fill="#00e676">⚡ Tool [open_application]: <tspan fill="#c9d1d9">Launched: C:\Users\demo\Downloads\setup.bat</tspan></text>
   </g>
 </svg>
