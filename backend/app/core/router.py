@@ -413,11 +413,13 @@ class DualModelRouter:
             keep_alive = "5m"
             think_enabled = self.pro_thinking
             temperature = 0.25
+            is_loaded = bool(status[target_tier].get("loaded"))
         else:
             chosen_model = self.fast_model
             keep_alive = "30m"
             think_enabled = False
             temperature = 0.4
+            is_loaded = bool(status["fast"].get("loaded"))
 
         await self._emit_event(
             on_event,
@@ -425,7 +427,11 @@ class DualModelRouter:
                 "type": "status",
                 "tier": target_tier,
                 "model": chosen_model,
-                "message": f"Generating with {chosen_model}...",
+                "message": (
+                    f"Generating with {chosen_model}..."
+                    if is_loaded
+                    else f"Loading {chosen_model} into VRAM/RAM..."
+                ),
             },
         )
 

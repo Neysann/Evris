@@ -1,8 +1,10 @@
 import asyncio
+import ctypes
 import os
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -17,8 +19,29 @@ if VENV_PYTHON.exists() and Path(sys.executable).resolve() != VENV_PYTHON.resolv
 
 sys.path.insert(0, str(BACKEND_DIR))
 
+
+def _enable_windows_vt100() -> None:
+    """Enable Windows ANSI/VT100 processing BEFORE creating Rich Console."""
+    if os.name != "nt":
+        return
+    try:
+        kernel32 = ctypes.windll.kernel32
+        for std_handle in (-11, -12):  # stdout, stderr
+            handle = kernel32.GetStdHandle(std_handle)
+            mode = ctypes.c_uint32()
+            if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+    except Exception:
+        pass
+    if sys.stdout.isatty():
+        os.system("")
+
+
+_enable_windows_vt100()
+
+import psutil  # noqa: E402
 from rich import box  # noqa: E402
-from rich.console import Console, Group  # noqa: E402
+from rich.console import Console, ConsoleOptions, Group, RenderResult  # noqa: E402
 from rich.live import Live  # noqa: E402
 from rich.markdown import Markdown  # noqa: E402
 from rich.panel import Panel  # noqa: E402
@@ -61,50 +84,86 @@ def ensure_ollama_running() -> None:
 
 
 class LiveTurnDisplay:
-    """Manages an animated spinner, tool badges, and live-streamed Markdown response."""
+    """Dynamic 12 FPS Rich renderable: animated spinner, elapsed timer, tok/s, tools, and live Markdown."""
 
     def __init__(self, predicted_tier: str, domain: str, model_name: str) -> None:
         self.tier = predicted_tier
         self.domain = domain.upper()
         self.model = model_name
-        self.status_text = f"Routing to {predicted_tier.upper()} [{self.domain}] ({model_name})..."
+        self.status_text = f"Checking Ollama & RAM guardrail for {predicted_tier.upper()}..."
         self.active_tool: Optional[str] = None
         self.tool_logs: List[Tuple[str, bool, str]] = []
         self.stream_text = ""
+        self.token_count = 0
+        self.started_at = time.perf_counter()
+        self.first_token_at: Optional[float] = None
         self.finished = False
         self.latency_ms = 0
-        self._lock = threading.Lock()
+        self._last_sys_sample = 0.0
+        self._sys_snap = ""
+        self._lock = threading.RLock()
         self._live: Optional[Live] = None
         self._paused = False
+        self._spinner = Spinner("dots", style=self._border_style())
+        psutil.cpu_percent(interval=None)  # prime non-blocking CPU delta
 
     def _border_style(self) -> str:
         return TIER_STYLES.get(self.tier, "cyan")
 
+    def _sample_system(self, now: float) -> str:
+        if now - self._last_sys_sample >= 1.0 or not self._sys_snap:
+            cpu = psutil.cpu_percent(interval=None)
+            free_gb = psutil.virtual_memory().available / (1024**3)
+            self._sys_snap = f"CPU {cpu:.0f}% • RAM {free_gb:.1f} GB free"
+            self._last_sys_sample = now
+        return self._sys_snap
+
+    def _tok_per_sec(self, now: float) -> float:
+        if not self.first_token_at or self.token_count <= 1:
+            return 0.0
+        gen_elapsed = max(0.05, now - self.first_token_at)
+        return self.token_count / gen_elapsed
+
     def render(self) -> Group:
+        now = time.perf_counter()
+        elapsed_s = now - self.started_at
+        sys_info = self._sample_system(now)
+        color = self._border_style()
         parts: List[Any] = []
 
         for t_name, ok, summary in self.tool_logs:
             icon = "⚡" if ok else "✖"
-            color = "green" if ok else "red"
-            parts.append(Text.from_markup(f"  [{color}]{icon} Tool [{t_name}]:[/{color}] {summary}"))
+            t_color = "green" if ok else "red"
+            parts.append(Text.from_markup(f"  [{t_color}]{icon} Tool [{t_name}]:[/{t_color}] {summary}"))
 
         if not self.finished:
             if self.active_tool:
-                spinner_msg = f"[yellow]Running tool [bold]{self.active_tool}[/bold]...[/yellow]"
+                spinner_msg = (
+                    f"[yellow]Running tool [bold]{self.active_tool}[/bold][/yellow] "
+                    f"[dim]({elapsed_s:.1f}s • {sys_info})[/dim]"
+                )
             elif self.stream_text:
-                spinner_msg = f"[{self._border_style()}]Streaming {self.tier.upper()} [{self.domain}] • {self.model}...[/{self._border_style()}]"
+                tps = self._tok_per_sec(now)
+                tps_str = f" • {tps:.0f} tok/s" if tps > 0 else ""
+                spinner_msg = (
+                    f"[{color}]Streaming {self.tier.upper()} [{self.domain}] • {self.model}[/{color}] "
+                    f"[dim]({self.token_count} chunks{tps_str} • {elapsed_s:.1f}s)[/dim]"
+                )
             else:
-                spinner_msg = f"[dim]{self.status_text}[/dim]"
-            parts.append(Spinner("dots", text=Text.from_markup(spinner_msg), style=self._border_style()))
+                spinner_msg = f"[{color}]{self.status_text}[/{color}] [dim]({elapsed_s:.1f}s • {sys_info})[/dim]"
+
+            self._spinner.text = Text.from_markup(spinner_msg)
+            self._spinner.style = color
+            parts.append(self._spinner)
 
         if self.stream_text or self.finished:
-            color = self._border_style()
             title = f"[bold {color}]EVRIS[/bold {color}] [dim]• {self.tier.upper()} • {self.domain}[/dim]"
-            subtitle = (
-                f"[dim]{self.model} • {self.latency_ms} ms[/dim]"
-                if self.finished
-                else f"[dim]{self.model} • streaming...[/dim]"
-            )
+            if self.finished:
+                subtitle = f"[dim]{self.model} • {self.latency_ms} ms[/dim]"
+            else:
+                tps = self._tok_per_sec(now)
+                tps_str = f" • {tps:.0f} tok/s" if tps > 0 else ""
+                subtitle = f"[dim]{self.model}{tps_str} • {elapsed_s:.1f}s[/dim]"
             body = Markdown(self.stream_text or "...")
             parts.append(
                 Panel(
@@ -121,28 +180,36 @@ class LiveTurnDisplay:
 
         return Group(*parts)
 
-    def start(self) -> None:
+    def __rich_console__(self, _console: Console, _options: ConsoleOptions) -> RenderResult:
         with self._lock:
-            self._live = Live(
-                self.render(),
-                console=console,
-                refresh_per_second=12,
-                vertical_overflow="visible",
-            )
-            self._live.start()
+            rendered = self.render()
+        yield rendered
+
+    def start(self) -> None:
+        live = Live(
+            self,
+            console=console,
+            refresh_per_second=12,
+            vertical_overflow="visible",
+        )
+        with self._lock:
+            self._live = live
+        live.start()
 
     def pause(self) -> None:
         with self._lock:
             self._paused = True
-            if self._live is not None:
-                self._live.stop()
+            live = self._live
+        if live is not None:
+            live.stop()
 
     def resume(self) -> None:
         with self._lock:
             self._paused = False
-            if self._live is not None and not self.finished:
-                self._live.start()
-                self._live.update(self.render())
+            live = self._live if not self.finished else None
+        if live is not None:
+            live.start()
+            live.refresh()
 
     def handle_event(self, event: Dict[str, Any]) -> None:
         with self._lock:
@@ -157,10 +224,16 @@ class LiveTurnDisplay:
                 summary = res.get("summary") or res.get("error") or "Done"
                 self.tool_logs.append((event.get("name", "tool"), bool(res.get("ok")), str(summary)))
             elif etype == "token":
+                if self.first_token_at is None:
+                    self.first_token_at = time.perf_counter()
+                self.token_count += 1
                 self.stream_text = event.get("text", "")
 
-            if self._live is not None and not self._paused:
-                self._live.update(self.render())
+            live = self._live
+            paused = self._paused
+
+        if live is not None and not paused:
+            live.refresh()
 
     def finish(
         self,
@@ -183,10 +256,12 @@ class LiveTurnDisplay:
                     res = tc.get("result") or {}
                     summary = res.get("summary") or res.get("error") or "Done"
                     self.tool_logs.append((tc.get("name", "tool"), bool(res.get("ok")), str(summary)))
-            if self._live is not None:
-                self._live.update(self.render())
-                self._live.stop()
-                self._live = None
+            live = self._live
+            self._live = None
+
+        if live is not None:
+            live.refresh()
+            live.stop()
 
 
 _active_display: Optional[LiveTurnDisplay] = None
@@ -295,9 +370,27 @@ def print_commands() -> None:
     console.print()
 
 
+async def print_live_prompt_bar() -> None:
+    """Show a compact live telemetry bar above the user prompt."""
+    status = await model_router.get_models_status()
+    cpu = psutil.cpu_percent(interval=None)
+    free_gb = status["free_ram_gb"]
+    loaded = [
+        info["model"]
+        for info in (status["fast"], status["pro"], status["limitless"])
+        if info.get("loaded")
+    ]
+    loaded_str = ", ".join(loaded) if loaded else "none"
+    mode = status["routing_mode"].upper()
+    mode_color = TIER_STYLES.get(status["routing_mode"], "cyan")
+    console.print(
+        f"[dim]┌─[/dim] [{mode_color}]MODE:{mode}[/{mode_color}] "
+        f"[dim]| CPU {cpu:.0f}% | RAM {free_gb:.1f} GB free | Loaded: {loaded_str}[/dim]"
+    )
+
+
 async def repl() -> None:
     global _active_display
-    os.system("")  # Enable ANSI colors on Windows console
     setup_logging()
     set_confirmation_handler(_cli_confirm)
     ensure_ollama_running()
@@ -305,7 +398,8 @@ async def repl() -> None:
 
     while True:
         try:
-            user_input = console.input("[bold white]You > [/bold white]").lstrip("\ufeff").strip()
+            await print_live_prompt_bar()
+            user_input = console.input("[bold white]└─ You > [/bold white]").lstrip("\ufeff").strip()
         except (EOFError, KeyboardInterrupt):
             console.print("\n[dim]Shutting down Evris.[/dim]")
             break
