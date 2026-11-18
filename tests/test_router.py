@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 import pytest
@@ -16,11 +17,33 @@ class _FakeResponse:
         return self._payload
 
 
+class _FakeStreamResponse:
+    def __init__(self, status_code: int, lines: list[str], text: str = ""):
+        self.status_code = status_code
+        self._lines = lines
+        self.text = text
+        self.reason_phrase = "Error"
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def aread(self):
+        return self.text.encode("utf-8")
+
+    async def aiter_lines(self):
+        for line in self._lines:
+            yield line
+
+
 class _FakeAsyncClient:
-    def __init__(self, tags_models=None, ps_models=None, chat_responses=None, **_kwargs):
+    def __init__(self, tags_models=None, ps_models=None, chat_responses=None, stream_responses=None, **_kwargs):
         self.tags_models = tags_models or []
         self.ps_models = ps_models or []
         self.chat_responses = list(chat_responses or [])
+        self.stream_responses = list(stream_responses or [])
         self.posted_payloads = []
 
     async def __aenter__(self):
@@ -41,6 +64,12 @@ class _FakeAsyncClient:
         if self.chat_responses:
             return self.chat_responses.pop(0)
         return _FakeResponse(200, {"message": {"role": "assistant", "content": "Nominal."}})
+
+    def stream(self, method, url, json=None):
+        self.posted_payloads.append(json)
+        if self.stream_responses:
+            return self.stream_responses.pop(0)
+        return _FakeStreamResponse(200, [])
 
 
 def test_domain_and_task_classification(isolated_memory_store):
@@ -165,3 +194,54 @@ async def test_generate_surfaces_ollama_http_error(isolated_memory_store):
     assert tier == "refused"
     assert "HTTP 500" in reply
     assert "CUDA out of memory" in reply
+
+
+@pytest.mark.asyncio
+async def test_streaming_emits_tokens_and_tool_events(isolated_memory_store):
+    router = DualModelRouter()
+    fake_vm = SimpleNamespace(available=int(12.0 * (1024**3)))
+    stream_round_1 = _FakeStreamResponse(
+        200,
+        [
+            json.dumps(
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {"function": {"name": "calculate_math", "arguments": {"expression": "6*7"}}}
+                        ],
+                    },
+                    "done": True,
+                }
+            )
+        ],
+    )
+    stream_round_2 = _FakeStreamResponse(
+        200,
+        [
+            json.dumps({"message": {"role": "assistant", "content": "The answer "}, "done": False}),
+            json.dumps({"message": {"role": "assistant", "content": "is 42."}, "done": True}),
+        ],
+    )
+    fake_client = _FakeAsyncClient(
+        tags_models=["qwen3.5:4b"],
+        stream_responses=[stream_round_1, stream_round_2],
+    )
+
+    events = []
+
+    with patch("app.core.router.psutil.virtual_memory", return_value=fake_vm), patch(
+        "app.core.router.httpx.AsyncClient", return_value=fake_client
+    ):
+        reply, tier, _model, _lat, tools = await router.generate_with_tools(
+            "fast",
+            [{"role": "user", "content": "6*7?"}],
+            on_event=events.append,
+        )
+
+    assert tier == "fast"
+    assert reply == "The answer is 42."
+    assert len(tools) == 1
+    assert [e["type"] for e in events] == ["status", "tool_start", "tool_end", "token", "token"]
+    assert fake_client.posted_payloads[0]["stream"] is True

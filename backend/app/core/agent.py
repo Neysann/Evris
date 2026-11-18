@@ -2,7 +2,7 @@ import asyncio
 import platform
 import re
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 import psutil
 from app.core.logging_config import get_logger
 from app.core.memory import memory_store
@@ -67,9 +67,15 @@ class EvrisAgent:
                 )
         return hooks
 
-    async def chat(self, user_text: str) -> Dict[str, Any]:
+    async def chat(
+        self,
+        user_text: str,
+        on_event: Optional[Callable[[Dict[str, Any]], Any]] = None,
+    ) -> Dict[str, Any]:
         user_msg = memory_store.add_message(role="user", content=user_text)
         pre_tools = await asyncio.to_thread(self._run_direct_hooks, user_text)
+        for hook_tool in pre_tools:
+            await model_router._emit_event(on_event, {"type": "tool_end", **hook_tool})
 
         target_tier, domain = model_router.classify_task(user_text)
         logger.info("Chat routed tier=%s domain=%s chars=%d", target_tier, domain, len(user_text))
@@ -133,7 +139,7 @@ class EvrisAgent:
             latency_ms,
             llm_tools,
         ) = await model_router.generate_with_tools(
-            target_tier=target_tier, messages=llm_messages
+            target_tier=target_tier, messages=llm_messages, on_event=on_event
         )
 
         all_tools = pre_tools + llm_tools

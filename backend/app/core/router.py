@@ -1,8 +1,9 @@
 import asyncio
+import inspect
 import json
 import re
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import httpx
 import psutil
 from app.config import settings
@@ -314,8 +315,88 @@ class DualModelRouter:
             f"It is not possible to execute this request right now."
         )
 
+    @staticmethod
+    async def _emit_event(
+        on_event: Optional[Callable[[Dict[str, Any]], Any]], event: Dict[str, Any]
+    ) -> None:
+        if on_event is None:
+            return
+        res = on_event(event)
+        if inspect.isawaitable(res):
+            await res
+
+    async def _call_ollama_chat(
+        self,
+        client: httpx.AsyncClient,
+        payload: Dict[str, Any],
+        on_event: Optional[Callable[[Dict[str, Any]], Any]],
+    ) -> Tuple[int, Dict[str, Any], str]:
+        """Execute a single /api/chat turn (streaming NDJSON when on_event is provided)."""
+        if on_event is None:
+            resp = await client.post(f"{self.ollama_url}/api/chat", json=payload)
+            if resp.status_code != 200:
+                return (resp.status_code, {}, self._extract_http_error(resp))
+            return (200, resp.json().get("message", {}), "")
+
+        stream_payload = {**payload, "stream": True}
+        content_parts: List[str] = []
+        thinking_parts: List[str] = []
+        tool_calls: List[Dict[str, Any]] = []
+        role = "assistant"
+
+        async with client.stream("POST", f"{self.ollama_url}/api/chat", json=stream_payload) as resp:
+            if resp.status_code != 200:
+                await resp.aread()
+                return (resp.status_code, {}, self._extract_http_error(resp))
+
+            async for line in resp.aiter_lines():
+                raw = line.strip()
+                if not raw:
+                    continue
+                try:
+                    chunk = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+
+                msg = chunk.get("message") or {}
+                if msg.get("role"):
+                    role = msg["role"]
+
+                delta = msg.get("content") or ""
+                if delta:
+                    content_parts.append(delta)
+                    await self._emit_event(
+                        on_event,
+                        {
+                            "type": "token",
+                            "delta": delta,
+                            "text": "".join(content_parts),
+                        },
+                    )
+
+                thinking_delta = msg.get("thinking") or ""
+                if thinking_delta:
+                    thinking_parts.append(thinking_delta)
+
+                chunk_tools = msg.get("tool_calls") or []
+                if chunk_tools:
+                    tool_calls.extend(chunk_tools)
+
+        assembled: Dict[str, Any] = {
+            "role": role,
+            "content": "".join(content_parts),
+        }
+        if thinking_parts:
+            assembled["thinking"] = "".join(thinking_parts)
+        if tool_calls:
+            assembled["tool_calls"] = tool_calls
+        return (200, assembled, "")
+
     async def generate_with_tools(
-        self, target_tier: str, messages: List[Dict[str, Any]]
+        self,
+        target_tier: str,
+        messages: List[Dict[str, Any]],
+        on_event: Optional[Callable[[Dict[str, Any]], Any]] = None,
     ) -> Tuple[str, str, str, int, List[Dict[str, Any]]]:
         """
         Executes the request on the selected tier ('fast', 'pro', or 'limitless') with native tool calling.
@@ -338,6 +419,16 @@ class DualModelRouter:
             think_enabled = False
             temperature = 0.4
 
+        await self._emit_event(
+            on_event,
+            {
+                "type": "status",
+                "tier": target_tier,
+                "model": chosen_model,
+                "message": f"Generating with {chosen_model}...",
+            },
+        )
+
         start = time.perf_counter()
         working_messages = list(messages)
         use_tools = True
@@ -357,25 +448,25 @@ class DualModelRouter:
                     }
                     if use_tools:
                         payload["tools"] = OLLAMA_TOOLS_SCHEMA
-                    resp = await client.post(f"{self.ollama_url}/api/chat", json=payload)
-                    if resp.status_code == 400 and use_tools:
+
+                    status_code, msg, err_detail = await self._call_ollama_chat(
+                        client, payload, on_event
+                    )
+                    if status_code == 400 and use_tools:
                         logger.warning("Model '%s' rejected tools payload (HTTP 400); retrying without tools.", chosen_model)
                         use_tools = False
                         continue
-                    if resp.status_code != 200:
-                        err_detail = self._extract_http_error(resp)
-                        logger.error("Ollama HTTP %s on '%s': %s", resp.status_code, chosen_model, err_detail)
+                    if status_code != 200:
+                        logger.error("Ollama HTTP %s on '%s': %s", status_code, chosen_model, err_detail)
                         latency_ms = int((time.perf_counter() - start) * 1000)
                         return (
-                            f"Local inference error on {chosen_model} (HTTP {resp.status_code}): {err_detail}",
+                            f"Local inference error on {chosen_model} (HTTP {status_code}): {err_detail}",
                             "refused",
                             chosen_model,
                             latency_ms,
                             executed_tools,
                         )
 
-                    data = resp.json()
-                    msg = data.get("message", {})
                     tool_calls = msg.get("tool_calls") or []
 
                     if not tool_calls:
@@ -395,14 +486,21 @@ class DualModelRouter:
                         fn = tc.get("function", {})
                         fn_name = fn.get("name", "")
                         fn_args = fn.get("arguments", {})
+                        await self._emit_event(
+                            on_event,
+                            {"type": "tool_start", "name": fn_name, "arguments": fn_args},
+                        )
                         tool_res = await asyncio.to_thread(execute_tool, fn_name, fn_args)
                         logger.info("Executed tool '%s' ok=%s", fn_name, tool_res.get("ok"))
-                        executed_tools.append(
-                            {
-                                "name": fn_name,
-                                "arguments": fn_args,
-                                "result": tool_res,
-                            }
+                        tool_entry = {
+                            "name": fn_name,
+                            "arguments": fn_args,
+                            "result": tool_res,
+                        }
+                        executed_tools.append(tool_entry)
+                        await self._emit_event(
+                            on_event,
+                            {"type": "tool_end", **tool_entry},
                         )
                         working_messages.append(
                             {
@@ -412,9 +510,18 @@ class DualModelRouter:
                         )
 
                 # Final synthesis call without tools if max tool rounds reached
-                resp = await client.post(
-                    f"{self.ollama_url}/api/chat",
-                    json={
+                await self._emit_event(
+                    on_event,
+                    {
+                        "type": "status",
+                        "tier": target_tier,
+                        "model": chosen_model,
+                        "message": f"Synthesizing final answer ({chosen_model})...",
+                    },
+                )
+                status_code, msg, err_detail = await self._call_ollama_chat(
+                    client,
+                    {
                         "model": chosen_model,
                         "messages": working_messages,
                         "stream": False,
@@ -422,16 +529,15 @@ class DualModelRouter:
                         "think": think_enabled,
                         "options": options,
                     },
+                    on_event,
                 )
                 latency_ms = int((time.perf_counter() - start) * 1000)
-                if resp.status_code == 200:
-                    msg = resp.json().get("message", {})
+                if status_code == 200:
                     content = (msg.get("content") or msg.get("thinking") or "").strip()
                     return (content, target_tier, chosen_model, latency_ms, executed_tools)
-                err_detail = self._extract_http_error(resp)
-                logger.error("Ollama synthesis HTTP %s on '%s': %s", resp.status_code, chosen_model, err_detail)
+                logger.error("Ollama synthesis HTTP %s on '%s': %s", status_code, chosen_model, err_detail)
                 return (
-                    f"Local inference error on {chosen_model} (HTTP {resp.status_code}): {err_detail}",
+                    f"Local inference error on {chosen_model} (HTTP {status_code}): {err_detail}",
                     "refused",
                     chosen_model,
                     latency_ms,
