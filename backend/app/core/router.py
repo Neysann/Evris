@@ -57,8 +57,9 @@ COMPLEX_TRIGGERS = re.compile(
 class DualModelRouter:
     """
     Routes prompts between:
-    - FAST model (qwen2.5:3b) for instant everyday answers and quick PC commands
-    - PRO model (qwen2.5:7b) for expert domain questions (Science, Finance, Tech, Strategy) & complex reasoning
+    - FAST model (qwen3.5:4b) for instant everyday answers and quick PC commands
+    - PRO model (qwen3.5:9b) for expert domain questions (Science, Finance, Tech, Strategy) & complex reasoning
+    - LIMITLESS model (huihui_ai/qwen3.5-abliterated:9b) for unrestricted, uncensored responses
     Supports native Ollama tool calling with multi-step execution.
     """
 
@@ -66,8 +67,10 @@ class DualModelRouter:
         self.ollama_url = settings.ollama_url.rstrip("/")
         self.fast_model = settings.fast_model
         self.pro_model = settings.pro_model
-        self.routing_mode = settings.routing_mode  # "auto" | "fast" | "pro"
+        self.limitless_model = settings.limitless_model
+        self.routing_mode = settings.routing_mode  # "auto" | "fast" | "pro" | "limitless"
         self.pro_enabled = settings.pro_enabled
+        self.pro_thinking = settings.pro_thinking
         self.pro_min_free_ram_gb = settings.pro_min_free_ram_gb
 
     @staticmethod
@@ -105,13 +108,15 @@ class DualModelRouter:
         return "general"
 
     def classify_task(self, user_text: str) -> Tuple[str, str]:
-        """Returns (tier, domain) where tier is 'fast' or 'pro'."""
+        """Returns (tier, domain) where tier is 'fast', 'pro', or 'limitless'."""
         domain = self.detect_domain(user_text)
 
         if self.routing_mode == "fast":
             return ("fast", domain)
         if self.routing_mode == "pro":
             return ("pro", domain)
+        if self.routing_mode == "limitless":
+            return ("limitless", domain)
 
         text = user_text.strip()
         if domain != "general":
@@ -119,6 +124,52 @@ class DualModelRouter:
         if len(text) > 140 or "\n" in text or "```" in text or COMPLEX_TRIGGERS.search(text):
             return ("pro", domain)
         return ("fast", domain)
+
+    def _inspect_heavy_model(
+        self,
+        model_name: str,
+        ollama_online: bool,
+        installed: List[str],
+        running: List[str],
+        running_models_raw: List[Dict[str, Any]],
+        free_ram_gb: float,
+        enabled: bool = True,
+    ) -> Dict[str, Any]:
+        """Compute install, load, and RAM guardrail status for Pro or Limitless models."""
+        is_installed = ollama_online and self._model_matches(model_name, installed)
+        is_loaded = ollama_online and self._model_matches(model_name, running)
+
+        loaded_ram_gb = 0.0
+        for m in running_models_raw:
+            if self._model_matches(model_name, [m.get("name", "")]):
+                loaded_ram_gb = round((m.get("size") or 0) / (1024**3), 2)
+                break
+
+        # Count free OS RAM plus any RAM already allocated to this model in Ollama.
+        effective_free_ram_gb = round(free_ram_gb + loaded_ram_gb, 2)
+        ram_ok = effective_free_ram_gb >= self.pro_min_free_ram_gb
+
+        if not enabled:
+            block_reason = "manually_disabled"
+        elif not ollama_online:
+            block_reason = "ollama_offline"
+        elif not is_installed:
+            block_reason = "not_installed"
+        elif not ram_ok:
+            block_reason = "insufficient_ram"
+        else:
+            block_reason = None
+
+        return {
+            "model": model_name,
+            "installed": is_installed,
+            "loaded": is_loaded,
+            "loaded_ram_gb": loaded_ram_gb,
+            "effective_free_ram_gb": effective_free_ram_gb,
+            "ram_ok": ram_ok,
+            "ready": block_reason is None,
+            "block_reason": block_reason,
+        }
 
     async def get_models_status(self) -> Dict[str, Any]:
         installed: List[str] = []
@@ -147,114 +198,120 @@ class DualModelRouter:
         fast_ready = ollama_online and self._model_matches(self.fast_model, installed)
         fast_loaded = ollama_online and self._model_matches(self.fast_model, running)
 
-        pro_installed = ollama_online and self._model_matches(self.pro_model, installed)
-        pro_loaded = ollama_online and self._model_matches(self.pro_model, running)
-
-        pro_loaded_ram_gb = 0.0
-        for m in running_models_raw:
-            if self._model_matches(self.pro_model, [m.get("name", "")]):
-                pro_loaded_ram_gb = round((m.get("size") or 0) / (1024**3), 2)
-                break
-
-        # RAM Safety Guardrail:
-        # Count free OS RAM plus any RAM already allocated to the loaded Pro model in Ollama.
-        effective_free_ram_gb = round(free_ram_gb + pro_loaded_ram_gb, 2)
-        ram_ok = effective_free_ram_gb >= self.pro_min_free_ram_gb
-
-        if not self.pro_enabled:
-            block_reason = "manually_disabled"
-        elif not ollama_online:
-            block_reason = "ollama_offline"
-        elif not pro_installed:
-            block_reason = "not_installed"
-        elif not ram_ok:
-            block_reason = "insufficient_ram"
-        else:
-            block_reason = None
-
-        pro_ready = block_reason is None
+        pro_status = self._inspect_heavy_model(
+            model_name=self.pro_model,
+            ollama_online=ollama_online,
+            installed=installed,
+            running=running,
+            running_models_raw=running_models_raw,
+            free_ram_gb=free_ram_gb,
+            enabled=self.pro_enabled,
+        )
+        limitless_status = self._inspect_heavy_model(
+            model_name=self.limitless_model,
+            ollama_online=ollama_online,
+            installed=installed,
+            running=running,
+            running_models_raw=running_models_raw,
+            free_ram_gb=free_ram_gb,
+            enabled=True,
+        )
 
         return {
             "ollama_online": ollama_online,
             "routing_mode": self.routing_mode,
             "pro_enabled": self.pro_enabled,
             "free_ram_gb": free_ram_gb,
-            "effective_free_ram_gb": effective_free_ram_gb,
+            "effective_free_ram_gb": pro_status["effective_free_ram_gb"],
             "pro_min_free_ram_gb": self.pro_min_free_ram_gb,
-            "ram_ok": ram_ok,
+            "ram_ok": pro_status["ram_ok"],
             "fast": {
                 "model": self.fast_model,
                 "ready": fast_ready,
                 "loaded": fast_loaded,
             },
-            "pro": {
-                "model": self.pro_model,
-                "installed": pro_installed,
-                "loaded": pro_loaded,
-                "loaded_ram_gb": pro_loaded_ram_gb,
-                "ram_ok": ram_ok,
-                "ready": pro_ready,
-                "block_reason": block_reason,
-            },
+            "pro": pro_status,
+            "limitless": limitless_status,
         }
+
+    def _build_heavy_refusal(
+        self, target_tier: str, model_name: str, status: Dict[str, Any]
+    ) -> str:
+        tier_status = status[target_tier]
+        block_reason = tier_status["block_reason"]
+        tier_label = "Limitless" if target_tier == "limitless" else "Pro"
+
+        if block_reason == "insufficient_ram":
+            top_procs = self._get_top_ram_processes(limit=3)
+            top_str = (
+                f" Top RAM consumers: {', '.join(top_procs)}."
+                if top_procs
+                else ""
+            )
+            return (
+                f"RAM Safety Guardrail triggered: Loading the {tier_label} model ({model_name}) "
+                f"requires at least {self.pro_min_free_ram_gb:.2f} GB of free RAM, "
+                f"but only {status['free_ram_gb']:.2f} GB is currently available on your system.{top_str} "
+                f"Please close memory-heavy applications or switch to '/mode fast' to proceed safely without swapping."
+            )
+        if block_reason == "not_installed":
+            return (
+                f"The {tier_label} model ({model_name}) is not installed in Ollama. "
+                f"Run 'ollama pull {model_name}' to enable {tier_label} mode."
+            )
+        return (
+            f"This task requires the {tier_label} model ({model_name}), "
+            f"which is currently offline or unavailable. "
+            f"It is not possible to execute this request right now."
+        )
 
     async def generate_with_tools(
         self, target_tier: str, messages: List[Dict[str, Any]]
     ) -> Tuple[str, str, str, int, List[Dict[str, Any]]]:
         """
-        Executes the request on the selected tier ('fast' or 'pro') with native tool calling.
+        Executes the request on the selected tier ('fast', 'pro', or 'limitless') with native tool calling.
         Returns (reply_text, tier_used, model_used, latency_ms, executed_tools).
         """
         status = await self.get_models_status()
         executed_tools: List[Dict[str, Any]] = []
 
-        if target_tier == "pro":
-            if not status["pro"]["ready"]:
-                block_reason = status["pro"]["block_reason"]
-                if block_reason == "insufficient_ram":
-                    top_procs = self._get_top_ram_processes(limit=3)
-                    top_str = (
-                        f" Top RAM consumers: {', '.join(top_procs)}."
-                        if top_procs
-                        else ""
-                    )
-                    refusal = (
-                        f"RAM Safety Guardrail triggered: Loading the Pro model ({self.pro_model}) "
-                        f"requires at least {self.pro_min_free_ram_gb:.2f} GB of free RAM, "
-                        f"but only {status['free_ram_gb']:.2f} GB is currently available on your system.{top_str} "
-                        f"Please close memory-heavy applications or switch to '/mode fast' to proceed safely without swapping."
-                    )
-                else:
-                    refusal = (
-                        f"This complex task requires the Pro model ({self.pro_model}), "
-                        f"which is currently offline or unavailable. "
-                        f"It is not possible to execute this request right now."
-                    )
-                return (refusal, "refused", self.pro_model, 0, executed_tools)
-            chosen_model = self.pro_model
+        if target_tier in ("pro", "limitless"):
+            chosen_model = self.limitless_model if target_tier == "limitless" else self.pro_model
+            if not status[target_tier]["ready"]:
+                refusal = self._build_heavy_refusal(target_tier, chosen_model, status)
+                return (refusal, "refused", chosen_model, 0, executed_tools)
             keep_alive = "5m"
+            think_enabled = self.pro_thinking
+            temperature = 0.25
         else:
             chosen_model = self.fast_model
             keep_alive = "30m"
+            think_enabled = False
+            temperature = 0.4
 
         start = time.perf_counter()
         working_messages = list(messages)
+        use_tools = True
+        options = {"temperature": temperature, "num_ctx": 8192}
 
         try:
-            async with httpx.AsyncClient(timeout=90.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 # Up to 3 tool-call rounds before final answer
                 for _ in range(3):
                     payload: Dict[str, Any] = {
                         "model": chosen_model,
                         "messages": working_messages,
-                        "tools": OLLAMA_TOOLS_SCHEMA,
                         "stream": False,
                         "keep_alive": keep_alive,
-                        "options": {
-                            "temperature": 0.25 if target_tier == "pro" else 0.4,
-                        },
+                        "think": think_enabled,
+                        "options": options,
                     }
+                    if use_tools:
+                        payload["tools"] = OLLAMA_TOOLS_SCHEMA
                     resp = await client.post(f"{self.ollama_url}/api/chat", json=payload)
+                    if resp.status_code == 400 and use_tools:
+                        use_tools = False
+                        continue
                     if resp.status_code != 200:
                         break
 
@@ -264,7 +321,7 @@ class DualModelRouter:
 
                     if not tool_calls:
                         latency_ms = int((time.perf_counter() - start) * 1000)
-                        content = msg.get("content", "").strip()
+                        content = (msg.get("content") or msg.get("thinking") or "").strip()
                         return (content, target_tier, chosen_model, latency_ms, executed_tools)
 
                     # Append the assistant's tool_calls message
@@ -298,11 +355,14 @@ class DualModelRouter:
                         "messages": working_messages,
                         "stream": False,
                         "keep_alive": keep_alive,
+                        "think": think_enabled,
+                        "options": options,
                     },
                 )
                 latency_ms = int((time.perf_counter() - start) * 1000)
                 if resp.status_code == 200:
-                    content = resp.json().get("message", {}).get("content", "").strip()
+                    msg = resp.json().get("message", {})
+                    content = (msg.get("content") or msg.get("thinking") or "").strip()
                     return (content, target_tier, chosen_model, latency_ms, executed_tools)
         except Exception as exc:
             latency_ms = int((time.perf_counter() - start) * 1000)

@@ -7,7 +7,7 @@ from app.tools.pc_control import (
     open_application,
     read_local_file,
 )
-from app.tools.research_tools import calculate_math, get_market_quote
+from app.tools.research_tools import calculate_math, get_market_quote, web_search
 
 OLLAMA_TOOLS_SCHEMA: List[Dict[str, Any]] = [
     {
@@ -35,7 +35,7 @@ OLLAMA_TOOLS_SCHEMA: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "open_application",
-            "description": "Launch a desktop application (calculator, notepad, explorer, vscode, terminal, taskmgr) or open a https:// URL on the user's PC.",
+            "description": "Launch any installed desktop application (by name, Start Menu shortcut, or file path) or open a https:// URL on the user's PC.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -124,6 +124,23 @@ OLLAMA_TOOLS_SCHEMA: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the live web for current events, recent facts, documentation, or anything beyond your training data.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query string.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 
@@ -156,6 +173,8 @@ def execute_tool(name: str, arguments: Dict[str, Any] | str) -> Dict[str, Any]:
             return calculate_math(expression=str(args.get("expression", "")))
         if name == "get_market_quote":
             return get_market_quote(symbol=str(args.get("symbol", "")))
+        if name == "web_search":
+            return web_search(query=str(args.get("query", "")))
         return {"ok": False, "error": f"Unknown tool: {name}"}
     except Exception as exc:
         return {"ok": False, "error": f"Tool execution error ({name}): {exc}"}

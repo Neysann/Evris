@@ -1,7 +1,9 @@
 import ast
+import html
 import math
 import operator
-from typing import Any, Dict
+import re
+from typing import Any, Dict, List
 import httpx
 
 SAFE_OPERATORS = {
@@ -103,3 +105,51 @@ def get_market_quote(symbol: str) -> Dict[str, Any]:
             }
     except Exception as exc:
         return {"ok": False, "error": f"Market lookup failed for {ticker}: {exc}"}
+
+
+def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
+    """Searches the web via DuckDuckGo for up-to-date facts, news, documentation, or general knowledge."""
+    q = query.strip()
+    if not q:
+        return {"ok": False, "error": "Search query cannot be empty."}
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        with httpx.Client(timeout=8.0, headers=headers, follow_redirects=True) as client:
+            resp = client.post("https://html.duckduckgo.com/html/", data={"q": q})
+            if resp.status_code != 200:
+                return {"ok": False, "error": f"Web search HTTP {resp.status_code}"}
+            body = resp.text
+
+        titles = re.findall(
+            r'<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+            body,
+            flags=re.DOTALL,
+        )
+        snippets = re.findall(
+            r'<a[^>]*class="result__snippet"[^>]*>(.*?)</a>',
+            body,
+            flags=re.DOTALL,
+        )
+        results: List[Dict[str, str]] = []
+        for idx, (url, raw_title) in enumerate(titles[:max_results]):
+            title = html.unescape(re.sub(r"<[^>]+>", "", raw_title)).strip()
+            snippet = (
+                html.unescape(re.sub(r"<[^>]+>", "", snippets[idx])).strip()
+                if idx < len(snippets)
+                else ""
+            )
+            results.append({"title": title, "url": url, "snippet": snippet})
+
+        if not results:
+            return {"ok": False, "error": f"No web results found for '{q}'."}
+
+        return {
+            "ok": True,
+            "query": q,
+            "results": results,
+            "summary": f"Found {len(results)} web result(s) for '{q}'.",
+        }
+    except Exception as exc:
+        return {"ok": False, "error": f"Web search failed: {exc}"}

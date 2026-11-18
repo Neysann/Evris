@@ -22,6 +22,7 @@ from app.tools.registry import OLLAMA_TOOLS_SCHEMA  # noqa: E402
 
 CYAN = "\033[96m"
 AMBER = "\033[93m"
+MAGENTA = "\033[95m"
 GREEN = "\033[92m"
 RED = "\033[91m"
 DIM = "\033[90m"
@@ -46,19 +47,24 @@ def ensure_ollama_running() -> None:
         pass
 
 
+def _format_heavy_state(info: dict) -> str:
+    if info["ready"]:
+        sub = "LOADED" if info.get("loaded") else "RAM OK"
+        return f"{GREEN}ONLINE • {sub}{RESET}"
+    if info.get("block_reason") == "insufficient_ram":
+        return f"{RED}LOW RAM{RESET}"
+    if info.get("block_reason") == "not_installed":
+        return f"{RED}NOT PULLED{RESET}"
+    return f"{RED}OFFLINE{RESET}"
+
+
 async def print_banner() -> None:
     status = await model_router.get_models_status()
     telemetry = get_system_telemetry()
     mem_count = len(memory_store.get_memories(limit=100))
 
-    pro_info = status["pro"]
-    if pro_info["ready"]:
-        pro_sub = "LOADED" if pro_info.get("loaded") else "RAM OK"
-        pro_state = f"{GREEN}ONLINE • {pro_sub}{RESET}"
-    elif pro_info.get("block_reason") == "insufficient_ram":
-        pro_state = f"{RED}BLOCKED • LOW RAM (<{status['pro_min_free_ram_gb']} GB){RESET}"
-    else:
-        pro_state = f"{RED}OFFLINE{RESET}"
+    pro_state = _format_heavy_state(status["pro"])
+    limitless_state = _format_heavy_state(status["limitless"])
 
     ram_guard_color = GREEN if status["ram_ok"] else RED
     ram_guard_label = (
@@ -67,7 +73,7 @@ async def print_banner() -> None:
     )
 
     print(f"\n{CYAN}{BOLD}============================================================{RESET}")
-    print(f"{CYAN}{BOLD}   E.V.R.I.S. — Terminal Interface (Dual-Model + Tools){RESET}")
+    print(f"{CYAN}{BOLD}   E.V.R.I.S. — Terminal Interface (Qwen 3.5 + Tools){RESET}")
     print(f"{CYAN}{BOLD}============================================================{RESET}")
     print(
         f" {DIM}System:{RESET} CPU {telemetry['cpu_percent']}% | "
@@ -76,7 +82,10 @@ async def print_banner() -> None:
     print(
         f" {DIM}Models:{RESET} FAST={CYAN}{status['fast']['model']}{RESET} | "
         f"PRO={AMBER}{status['pro']['model']}{RESET} ({pro_state}) | "
-        f"Mode={BOLD}{status['routing_mode'].upper()}{RESET} | "
+        f"LIMITLESS={MAGENTA}{status['limitless']['model']}{RESET} ({limitless_state})"
+    )
+    print(
+        f" {DIM}Config:{RESET} Mode={BOLD}{status['routing_mode'].upper()}{RESET} | "
         f"Memories={BOLD}{mem_count}{RESET}"
     )
     print(f"{DIM}------------------------------------------------------------{RESET}")
@@ -86,16 +95,16 @@ async def print_banner() -> None:
 
 def print_commands() -> None:
     print(f"\n{CYAN}{BOLD}Available Commands:{RESET}")
-    print(f"  {CYAN}/help{RESET}                - Show this command list")
-    print(f"  {CYAN}/status{RESET}              - Show live system & model monitoring")
-    print(f"  {CYAN}/mode auto|fast|pro{RESET}  - Switch routing mode")
-    print(f"  {CYAN}/pro on|off{RESET}          - Toggle Pro model availability (test refusal)")
-    print(f"  {CYAN}/ram [gb]{RESET}            - Check or set Pro RAM safety threshold (e.g. /ram 3.0)")
-    print(f"  {CYAN}/memories{RESET}            - List saved long-term facts")
-    print(f"  {CYAN}/forget <id|all>{RESET}     - Delete a saved memory (or all)")
-    print(f"  {CYAN}/tools{RESET}               - List autonomous agent tools")
-    print(f"  {CYAN}/clear{RESET}               - Clear conversation history")
-    print(f"  {CYAN}/exit{RESET}                - Quit Evris\n")
+    print(f"  {CYAN}/help{RESET}                          - Show this command list")
+    print(f"  {CYAN}/status{RESET}                        - Show live system & model monitoring")
+    print(f"  {CYAN}/mode auto|fast|pro|limitless{RESET}  - Switch routing mode (limitless = uncensored)")
+    print(f"  {CYAN}/pro on|off{RESET}                    - Toggle Pro model availability (test refusal)")
+    print(f"  {CYAN}/ram [gb]{RESET}                      - Check or set heavy-model RAM threshold (e.g. /ram 5.5)")
+    print(f"  {CYAN}/memories{RESET}                      - List saved long-term facts")
+    print(f"  {CYAN}/forget <id|all>{RESET}               - Delete a saved memory (or all)")
+    print(f"  {CYAN}/tools{RESET}                         - List autonomous agent tools")
+    print(f"  {CYAN}/clear{RESET}                         - Clear conversation history")
+    print(f"  {CYAN}/exit{RESET}                          - Quit Evris\n")
 
 
 async def repl() -> None:
@@ -162,7 +171,7 @@ async def repl() -> None:
                     print(f"  • {GREEN}{fn['name']}{RESET}: {fn['description']}")
                 print()
                 continue
-            elif cmd == "/mode" and len(parts) > 1 and parts[1].lower() in ("auto", "fast", "pro"):
+            elif cmd == "/mode" and len(parts) > 1 and parts[1].lower() in ("auto", "fast", "pro", "limitless"):
                 mode_val = parts[1].lower()
                 model_router.routing_mode = mode_val
                 print(f"{GREEN}✓ Routing mode set to: {mode_val.upper()}{RESET}\n")
@@ -205,11 +214,12 @@ async def repl() -> None:
         # Preview which model & specialist domain the router selected before inference starts
         predicted_tier, domain = model_router.classify_task(user_input)
         domain_tag = domain.upper()
-        tier_label = (
-            f"{CYAN}FAST [{domain_tag}] ({model_router.fast_model}){RESET}"
-            if predicted_tier == "fast"
-            else f"{AMBER}PRO [{domain_tag}] ({model_router.pro_model}){RESET}"
-        )
+        if predicted_tier == "fast":
+            tier_label = f"{CYAN}FAST [{domain_tag}] ({model_router.fast_model}){RESET}"
+        elif predicted_tier == "limitless":
+            tier_label = f"{MAGENTA}LIMITLESS [{domain_tag}] ({model_router.limitless_model}){RESET}"
+        else:
+            tier_label = f"{AMBER}PRO [{domain_tag}] ({model_router.pro_model}){RESET}"
         print(f"{DIM}→ Routing to {tier_label}...{RESET}")
 
         result = await evris_agent.chat(user_input)
@@ -230,6 +240,8 @@ async def repl() -> None:
             badge = f"{CYAN}[FAST • {domain_tag} • {model} • {latency} ms]{RESET}"
         elif tier == "pro":
             badge = f"{AMBER}[PRO • {domain_tag} • {model} • {latency} ms]{RESET}"
+        elif tier == "limitless":
+            badge = f"{MAGENTA}[LIMITLESS • {domain_tag} • {model} • {latency} ms]{RESET}"
         else:
             reason_tag = "LOW RAM" if "RAM Safety Guardrail" in reply else "OFFLINE"
             badge = f"{RED}[REFUSED • {domain_tag} • {model} {reason_tag}]{RESET}"

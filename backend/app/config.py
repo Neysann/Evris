@@ -12,15 +12,19 @@ class Settings(BaseSettings):
 
     ollama_url: str = "http://127.0.0.1:11434"
 
-    # Dual-Model configuration (Fast for quick answers, Pro for complex tasks)
-    fast_model: str = "qwen2.5:3b"
-    pro_model: str = "qwen2.5:7b"
+    # Multi-Model configuration (Qwen 3.5 — fast/pro + abliterated limitless tier)
+    fast_model: str = "qwen3.5:4b"
+    pro_model: str = "qwen3.5:9b"
+    limitless_model: str = "huihui_ai/qwen3.5-abliterated:9b"
 
-    # Routing mode: "auto" (complexity classifier), "fast", or "pro"
+    # Routing mode: "auto" (complexity classifier), "fast", "pro", or "limitless"
     routing_mode: str = "auto"
 
-    # Minimum free RAM (GB) required if the Pro model is not yet loaded in memory
-    pro_min_free_ram_gb: float = 3.0
+    # Disable Ollama chain-of-thought tokens by default so CPU tool-calling stays responsive
+    pro_thinking: bool = False
+
+    # Minimum free RAM (GB) required if a 9B model (Pro / Limitless) is not yet loaded in memory
+    pro_min_free_ram_gb: float = 5.5
 
     # Allows simulating the Pro node being offline/unavailable for testing refusal
     pro_enabled: bool = True

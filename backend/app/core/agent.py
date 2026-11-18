@@ -26,7 +26,7 @@ def get_system_telemetry() -> Dict[str, Any]:
 
 class EvrisAgent:
     def _run_direct_hooks(self, user_text: str) -> List[Dict[str, Any]]:
-        """Deterministic pre-hooks for explicit memory saving so even the 3B Fast model never misses them."""
+        """Deterministic pre-hooks for explicit memory saving and exact math evaluation."""
         hooks: List[Dict[str, Any]] = []
         mem_match = re.search(
             r"^(?:evris[,\s]+)?(?:please\s+)?(?:remember that|memorize that|note that|retiens que|souviens-toi que|mémorise que)\s+(.+)$",
@@ -43,6 +43,24 @@ class EvrisAgent:
                     "result": res,
                 }
             )
+
+        # Extract explicit math expression if user asks to calculate one
+        math_match = re.search(
+            r"(?:calculate|compute|calcule|eval)\s+([0-9\.\+\-\*\/\(\)\^\s]{3,})$",
+            user_text.strip(),
+            flags=re.IGNORECASE,
+        )
+        if math_match:
+            expr = math_match.group(1).strip()
+            res = execute_tool("calculate_math", {"expression": expr})
+            if res.get("ok"):
+                hooks.append(
+                    {
+                        "name": "calculate_math",
+                        "arguments": {"expression": expr},
+                        "result": res,
+                    }
+                )
         return hooks
 
     async def chat(self, user_text: str) -> Dict[str, Any]:
@@ -60,9 +78,35 @@ class EvrisAgent:
             memories=memories,
         )
 
+        is_french = bool(
+            re.search(
+                r"[éèêàùçîô]|(\b(je|tu|il|elle|nous|vous|est|es|suis|qui|quoi|comment|pourquoi|salut|bonjour|merci|quels|quelle)\b)",
+                user_text,
+                flags=re.IGNORECASE,
+            )
+        )
+        priming = (
+            [
+                {"role": "user", "content": "Qui es-tu ?"},
+                {
+                    "role": "assistant",
+                    "content": "Je suis EVRIS, votre intelligence artificielle locale. Tous les systèmes sont opérationnels.",
+                },
+            ]
+            if is_french
+            else [
+                {"role": "user", "content": "Hey, you online?"},
+                {
+                    "role": "assistant",
+                    "content": "Very much so. Systems are nominal—what are we working on?",
+                },
+            ]
+        )
+
         history = memory_store.get_recent_messages(limit=12)
         llm_messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": system_prompt}
+            {"role": "system", "content": system_prompt},
+            *priming,
         ]
         for msg in history:
             if msg["role"] in ("user", "assistant"):
@@ -73,7 +117,7 @@ class EvrisAgent:
             llm_messages.append(
                 {
                     "role": "system",
-                    "content": f"System action already executed: {'; '.join(summaries)}. Confirm briefly.",
+                    "content": f"Verified tool result: {'; '.join(summaries)}. State this result directly to the user in your EVRIS voice.",
                 }
             )
 
