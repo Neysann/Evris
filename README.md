@@ -9,7 +9,7 @@
 
 ## Terminal Interface Preview
 
-![E.V.R.I.S. Terminal Interface](./docs/evris-terminal.svg)
+![E.V.R.I.S. Terminal Interface](./docs/evris-terminal-v2.svg)
 
 ---
 

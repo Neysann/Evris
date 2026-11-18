@@ -115,7 +115,7 @@ c:\Projets\Evris\
 ├── .gitignore
 │
 ├── docs/
-│   └── evris-terminal.svg       # Terminal interface preview
+│   └── evris-terminal-v2.svg    # Terminal interface preview
 │
 ├── backend/                     # Python Backend & AI Core
 │   ├── requirements.txt
