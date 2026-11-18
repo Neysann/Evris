@@ -48,6 +48,15 @@ class MemoryStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
             conn.commit()
 
     def add_message(
@@ -131,6 +140,32 @@ class MemoryStore:
         with self._get_conn() as conn:
             conn.execute("DELETE FROM memories")
             conn.commit()
+
+    # Persistent Runtime Settings
+    def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        with self._get_conn() as conn:
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = ?", (key,)
+            ).fetchone()
+            return row["value"] if row else default
+
+    def set_setting(self, key: str, value: Any) -> None:
+        now = datetime.now().isoformat(timespec="seconds")
+        with self._get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """,
+                (key, str(value), now),
+            )
+            conn.commit()
+
+    def get_all_settings(self) -> Dict[str, str]:
+        with self._get_conn() as conn:
+            rows = conn.execute("SELECT key, value FROM settings").fetchall()
+            return {r["key"]: r["value"] for r in rows}
 
 
 memory_store = MemoryStore()

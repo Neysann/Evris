@@ -1,5 +1,5 @@
 from pathlib import Path
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -29,11 +29,13 @@ class Settings(BaseSettings):
     # Allows simulating the Pro node being offline/unavailable for testing refusal
     pro_enabled: bool = True
 
-    db_path: str = str(DATA_DIR / "evris_memory.db")
+    # Smart confirmation prompt for risky app launches / sensitive file reads
+    confirm_risky_actions: bool = True
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    db_path: str = str(DATA_DIR / "evris_memory.db")
+    log_path: str = str(DATA_DIR / "evris.log")
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 settings = Settings()

@@ -5,6 +5,9 @@ import operator
 import re
 from typing import Any, Dict, List
 import httpx
+from app.core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 SAFE_OPERATORS = {
     ast.Add: operator.add,
@@ -104,6 +107,7 @@ def get_market_quote(symbol: str) -> Dict[str, Any]:
                 "summary": f"{ticker}: {price} {currency} ({sign}{change_pct}%)",
             }
     except Exception as exc:
+        logger.warning("Market lookup failed for %s: %s", ticker, exc)
         return {"ok": False, "error": f"Market lookup failed for {ticker}: {exc}"}
 
 
@@ -152,4 +156,5 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             "summary": f"Found {len(results)} web result(s) for '{q}'.",
         }
     except Exception as exc:
+        logger.warning("Web search failed for '%s': %s", q, exc)
         return {"ok": False, "error": f"Web search failed: {exc}"}

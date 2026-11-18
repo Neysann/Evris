@@ -16,8 +16,10 @@ if VENV_PYTHON.exists() and Path(sys.executable).resolve() != VENV_PYTHON.resolv
 sys.path.insert(0, str(BACKEND_DIR))
 
 from app.core.agent import evris_agent, get_system_telemetry  # noqa: E402
+from app.core.logging_config import setup_logging  # noqa: E402
 from app.core.memory import memory_store  # noqa: E402
 from app.core.router import model_router  # noqa: E402
+from app.tools.pc_control import set_confirmation_handler  # noqa: E402
 from app.tools.registry import OLLAMA_TOOLS_SCHEMA  # noqa: E402
 
 CYAN = "\033[96m"
@@ -45,6 +47,18 @@ def ensure_ollama_running() -> None:
             )
     except Exception:
         pass
+
+
+def _cli_confirm(action_prompt: str) -> bool:
+    """Prompt the user in the terminal before running a risky launch or sensitive file read."""
+    try:
+        answer = input(
+            f"\n{AMBER}⚠ Security confirmation required:{RESET} {action_prompt}\n"
+            f"  Proceed? [y/N] > "
+        ).strip().lower()
+        return answer in ("y", "yes", "o", "oui")
+    except (EOFError, KeyboardInterrupt):
+        return False
 
 
 def _format_heavy_state(info: dict) -> str:
@@ -84,8 +98,10 @@ async def print_banner() -> None:
         f"PRO={AMBER}{status['pro']['model']}{RESET} ({pro_state}) | "
         f"LIMITLESS={MAGENTA}{status['limitless']['model']}{RESET} ({limitless_state})"
     )
+    confirm_label = f"{GREEN}ON{RESET}" if status.get("confirm_risky_actions", True) else f"{AMBER}OFF{RESET}"
     print(
         f" {DIM}Config:{RESET} Mode={BOLD}{status['routing_mode'].upper()}{RESET} | "
+        f"Confirm={confirm_label} | "
         f"Memories={BOLD}{mem_count}{RESET}"
     )
     print(f"{DIM}------------------------------------------------------------{RESET}")
@@ -99,6 +115,7 @@ def print_commands() -> None:
     print(f"  {CYAN}/status{RESET}                        - Show live system & model monitoring")
     print(f"  {CYAN}/mode auto|fast|pro|limitless{RESET}  - Switch routing mode (limitless = uncensored)")
     print(f"  {CYAN}/pro on|off{RESET}                    - Toggle Pro model availability (test refusal)")
+    print(f"  {CYAN}/confirm on|off{RESET}                - Toggle smart confirmation for risky actions")
     print(f"  {CYAN}/ram [gb]{RESET}                      - Check or set heavy-model RAM threshold (e.g. /ram 5.5)")
     print(f"  {CYAN}/memories{RESET}                      - List saved long-term facts")
     print(f"  {CYAN}/forget <id|all>{RESET}               - Delete a saved memory (or all)")
@@ -109,6 +126,8 @@ def print_commands() -> None:
 
 async def repl() -> None:
     os.system("")  # Enable ANSI colors on Windows console
+    setup_logging()
+    set_confirmation_handler(_cli_confirm)
     ensure_ollama_running()
     await print_banner()
 
@@ -173,13 +192,20 @@ async def repl() -> None:
                 continue
             elif cmd == "/mode" and len(parts) > 1 and parts[1].lower() in ("auto", "fast", "pro", "limitless"):
                 mode_val = parts[1].lower()
-                model_router.routing_mode = mode_val
-                print(f"{GREEN}✓ Routing mode set to: {mode_val.upper()}{RESET}\n")
+                model_router.set_routing_mode(mode_val)
+                print(f"{GREEN}✓ Routing mode set to: {mode_val.upper()} (saved){RESET}\n")
                 continue
             elif cmd == "/pro" and len(parts) > 1 and parts[1].lower() in ("on", "off"):
-                model_router.pro_enabled = parts[1].lower() == "on"
+                enabled = parts[1].lower() == "on"
+                model_router.set_pro_enabled(enabled)
                 state_str = f"{GREEN}ONLINE{RESET}" if model_router.pro_enabled else f"{RED}OFFLINE{RESET}"
-                print(f"✓ Pro Node state set to: {state_str}\n")
+                print(f"✓ Pro Node state set to: {state_str} (saved)\n")
+                continue
+            elif cmd == "/confirm" and len(parts) > 1 and parts[1].lower() in ("on", "off"):
+                enabled = parts[1].lower() == "on"
+                model_router.set_confirm_risky_actions(enabled)
+                state_str = f"{GREEN}ON{RESET}" if enabled else f"{AMBER}OFF{RESET}"
+                print(f"✓ Smart security confirmation set to: {state_str} (saved)\n")
                 continue
             elif cmd == "/ram":
                 if len(parts) > 1:
@@ -187,9 +213,9 @@ async def repl() -> None:
                         val = float(parts[1])
                         if val < 0:
                             raise ValueError
-                        model_router.pro_min_free_ram_gb = round(val, 2)
+                        model_router.set_pro_min_free_ram_gb(val)
                         print(
-                            f"{GREEN}✓ Pro RAM safety guardrail set to >= {model_router.pro_min_free_ram_gb:.2f} GB free RAM.{RESET}\n"
+                            f"{GREEN}✓ Pro RAM safety guardrail set to >= {model_router.pro_min_free_ram_gb:.2f} GB free RAM (saved).{RESET}\n"
                         )
                     except ValueError:
                         print(f"{RED}Usage: /ram [gb] (e.g. /ram 3.0 or /ram 12.0 to test low-RAM refusal){RESET}\n")

@@ -1,12 +1,16 @@
+import asyncio
 import platform
 import re
 from datetime import datetime
 from typing import Any, Dict, List
 import psutil
+from app.core.logging_config import get_logger
 from app.core.memory import memory_store
 from app.core.persona import build_evris_persona
 from app.core.router import model_router
 from app.tools.registry import execute_tool
+
+logger = get_logger(__name__)
 
 
 def get_system_telemetry() -> Dict[str, Any]:
@@ -65,10 +69,11 @@ class EvrisAgent:
 
     async def chat(self, user_text: str) -> Dict[str, Any]:
         user_msg = memory_store.add_message(role="user", content=user_text)
-        pre_tools = self._run_direct_hooks(user_text)
+        pre_tools = await asyncio.to_thread(self._run_direct_hooks, user_text)
 
         target_tier, domain = model_router.classify_task(user_text)
-        telemetry = get_system_telemetry()
+        logger.info("Chat routed tier=%s domain=%s chars=%d", target_tier, domain, len(user_text))
+        telemetry = await asyncio.to_thread(get_system_telemetry)
         memories = memory_store.get_memories(limit=30)
 
         system_prompt = build_evris_persona(

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 import time
@@ -5,7 +6,12 @@ from typing import Any, Dict, List, Tuple
 import httpx
 import psutil
 from app.config import settings
+from app.core.logging_config import get_logger
+from app.core.memory import memory_store
+from app.tools.pc_control import is_confirm_risky_actions_enabled, set_confirm_risky_actions
 from app.tools.registry import OLLAMA_TOOLS_SCHEMA, execute_tool
+
+logger = get_logger(__name__)
 
 DOMAIN_PATTERNS = {
     "finance": re.compile(
@@ -72,6 +78,48 @@ class DualModelRouter:
         self.pro_enabled = settings.pro_enabled
         self.pro_thinking = settings.pro_thinking
         self.pro_min_free_ram_gb = settings.pro_min_free_ram_gb
+        self.load_persisted_settings()
+
+    def load_persisted_settings(self) -> None:
+        """Restore runtime settings from SQLite if previously saved."""
+        saved = memory_store.get_all_settings()
+        if saved.get("routing_mode") in ("auto", "fast", "pro", "limitless"):
+            self.routing_mode = saved["routing_mode"]
+        if "pro_enabled" in saved:
+            self.pro_enabled = saved["pro_enabled"].lower() == "true"
+        if "pro_min_free_ram_gb" in saved:
+            try:
+                val = float(saved["pro_min_free_ram_gb"])
+                if val >= 0:
+                    self.pro_min_free_ram_gb = round(val, 2)
+            except ValueError:
+                pass
+        if "confirm_risky_actions" in saved:
+            set_confirm_risky_actions(saved["confirm_risky_actions"].lower() == "true")
+
+    def set_routing_mode(self, mode: str) -> None:
+        if mode not in ("auto", "fast", "pro", "limitless"):
+            raise ValueError(f"Unsupported routing mode: {mode}")
+        self.routing_mode = mode
+        memory_store.set_setting("routing_mode", mode)
+        logger.info("Routing mode updated to '%s'", mode)
+
+    def set_pro_enabled(self, enabled: bool) -> None:
+        self.pro_enabled = enabled
+        memory_store.set_setting("pro_enabled", "true" if enabled else "false")
+        logger.info("Pro node enabled=%s", enabled)
+
+    def set_pro_min_free_ram_gb(self, gb: float) -> None:
+        if gb < 0:
+            raise ValueError("RAM threshold cannot be negative")
+        self.pro_min_free_ram_gb = round(gb, 2)
+        memory_store.set_setting("pro_min_free_ram_gb", self.pro_min_free_ram_gb)
+        logger.info("Pro min free RAM updated to %.2f GB", self.pro_min_free_ram_gb)
+
+    def set_confirm_risky_actions(self, enabled: bool) -> None:
+        set_confirm_risky_actions(enabled)
+        memory_store.set_setting("confirm_risky_actions", "true" if enabled else "false")
+        logger.info("Risky action confirmation enabled=%s", enabled)
 
     @staticmethod
     def _model_matches(target: str, candidates: List[str]) -> bool:
@@ -221,6 +269,7 @@ class DualModelRouter:
             "ollama_online": ollama_online,
             "routing_mode": self.routing_mode,
             "pro_enabled": self.pro_enabled,
+            "confirm_risky_actions": is_confirm_risky_actions_enabled(),
             "free_ram_gb": free_ram_gb,
             "effective_free_ram_gb": pro_status["effective_free_ram_gb"],
             "pro_min_free_ram_gb": self.pro_min_free_ram_gb,
@@ -310,10 +359,20 @@ class DualModelRouter:
                         payload["tools"] = OLLAMA_TOOLS_SCHEMA
                     resp = await client.post(f"{self.ollama_url}/api/chat", json=payload)
                     if resp.status_code == 400 and use_tools:
+                        logger.warning("Model '%s' rejected tools payload (HTTP 400); retrying without tools.", chosen_model)
                         use_tools = False
                         continue
                     if resp.status_code != 200:
-                        break
+                        err_detail = self._extract_http_error(resp)
+                        logger.error("Ollama HTTP %s on '%s': %s", resp.status_code, chosen_model, err_detail)
+                        latency_ms = int((time.perf_counter() - start) * 1000)
+                        return (
+                            f"Local inference error on {chosen_model} (HTTP {resp.status_code}): {err_detail}",
+                            "refused",
+                            chosen_model,
+                            latency_ms,
+                            executed_tools,
+                        )
 
                     data = resp.json()
                     msg = data.get("message", {})
@@ -322,17 +381,22 @@ class DualModelRouter:
                     if not tool_calls:
                         latency_ms = int((time.perf_counter() - start) * 1000)
                         content = (msg.get("content") or msg.get("thinking") or "").strip()
+                        logger.info(
+                            "Completed tier=%s model=%s latency=%dms tools=%d",
+                            target_tier, chosen_model, latency_ms, len(executed_tools),
+                        )
                         return (content, target_tier, chosen_model, latency_ms, executed_tools)
 
                     # Append the assistant's tool_calls message
                     working_messages.append(msg)
 
-                    # Execute each requested tool
+                    # Execute each requested tool off the asyncio event loop
                     for tc in tool_calls:
                         fn = tc.get("function", {})
                         fn_name = fn.get("name", "")
                         fn_args = fn.get("arguments", {})
-                        tool_res = execute_tool(fn_name, fn_args)
+                        tool_res = await asyncio.to_thread(execute_tool, fn_name, fn_args)
+                        logger.info("Executed tool '%s' ok=%s", fn_name, tool_res.get("ok"))
                         executed_tools.append(
                             {
                                 "name": fn_name,
@@ -364,8 +428,18 @@ class DualModelRouter:
                     msg = resp.json().get("message", {})
                     content = (msg.get("content") or msg.get("thinking") or "").strip()
                     return (content, target_tier, chosen_model, latency_ms, executed_tools)
+                err_detail = self._extract_http_error(resp)
+                logger.error("Ollama synthesis HTTP %s on '%s': %s", resp.status_code, chosen_model, err_detail)
+                return (
+                    f"Local inference error on {chosen_model} (HTTP {resp.status_code}): {err_detail}",
+                    "refused",
+                    chosen_model,
+                    latency_ms,
+                    executed_tools,
+                )
         except Exception as exc:
             latency_ms = int((time.perf_counter() - start) * 1000)
+            logger.exception("Local inference exception on '%s'", chosen_model)
             return (
                 f"Local inference error on {chosen_model}: {exc}",
                 "refused",
@@ -374,13 +448,15 @@ class DualModelRouter:
                 executed_tools,
             )
 
-        return (
-            f"Unable to reach local Ollama engine for {chosen_model}.",
-            "refused",
-            chosen_model,
-            0,
-            executed_tools,
-        )
+    @staticmethod
+    def _extract_http_error(resp: httpx.Response) -> str:
+        try:
+            data = resp.json()
+            if isinstance(data, dict) and data.get("error"):
+                return str(data["error"])
+        except Exception:
+            pass
+        return (resp.text or resp.reason_phrase or "Unknown error").strip()[:300]
 
 
 model_router = DualModelRouter()
