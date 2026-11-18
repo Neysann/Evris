@@ -23,8 +23,19 @@ def test_live_turn_display_lifecycle():
     display.pause()
     display.resume()
     display.handle_event({"type": "token", "delta": "4.", "text": "**4.**"})
-    display.finish("fast", "qwen3.5:4b", 123, "**4.**", [])
+    display.handle_event(
+        {
+            "type": "tier_switch",
+            "tier": "limitless",
+            "model": "huihui_ai/qwen3.5-abliterated:9b",
+            "message": "Switching to LIMITLESS...",
+        }
+    )
+    assert display.tier == "limitless"
+    assert display.stream_text == ""
+    display.handle_event({"type": "token", "delta": "OK", "text": "OK"})
+    display.finish("limitless", "huihui_ai/qwen3.5-abliterated:9b", 123, "OK", [])
 
     assert display.finished is True
-    assert display.stream_text == "**4.**"
+    assert display.stream_text == "OK"
     assert len(display.tool_logs) == 1

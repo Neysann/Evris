@@ -216,6 +216,13 @@ class LiveTurnDisplay:
             etype = event.get("type")
             if etype == "status":
                 self.status_text = event.get("message") or self.status_text
+            elif etype == "tier_switch":
+                self.tier = event.get("tier") or self.tier
+                self.model = event.get("model") or self.model
+                self.status_text = event.get("message") or self.status_text
+                self.stream_text = ""
+                self.token_count = 0
+                self.first_token_at = None
             elif etype == "tool_start":
                 self.active_tool = event.get("name", "tool")
             elif etype == "tool_end":

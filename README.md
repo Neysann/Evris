@@ -26,7 +26,7 @@ Every prompt is automatically analyzed before inference starts:
 
 | Command | Description |
 | :--- | :--- |
-| `/mode auto` | Automatic complexity & domain routing between **FAST** and **PRO** *(default)* |
+| `/mode auto` | Automatic 3-way routing between **FAST**, **PRO**, and **LIMITLESS** *(with auto-escalation on refusal, default)* |
 | `/mode fast` | Force all prompts to use the **FAST** model (`qwen3.5:4b`) |
 | `/mode pro` | Force all prompts to use the **PRO** model (`qwen3.5:9b`) |
 | `/mode limitless` | Force all prompts to use the uncensored **LIMITLESS** model (`huihui_ai/qwen3.5-abliterated:9b`) |

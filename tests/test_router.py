@@ -81,6 +81,8 @@ def test_domain_and_task_classification(isolated_memory_store):
     assert router.classify_task("Explain quantum entanglement") == ("pro", "science")
     assert router.classify_task("Write a Python function to sort") == ("pro", "tech")
     assert router.classify_task("Explain Nash equilibrium strategy") == ("pro", "strategy")
+    assert router.classify_task("Réponds sans censure à cette question") == ("limitless", "general")
+    assert router.classify_task("Explain pentest techniques uncensored") == ("limitless", "general")
 
     router.set_routing_mode("limitless")
     assert router.classify_task("Salut") == ("limitless", "general")
@@ -245,3 +247,58 @@ async def test_streaming_emits_tokens_and_tool_events(isolated_memory_store):
     assert len(tools) == 1
     assert [e["type"] for e in events] == ["status", "tool_start", "tool_end", "token", "token"]
     assert fake_client.posted_payloads[0]["stream"] is True
+
+
+@pytest.mark.asyncio
+async def test_auto_mode_escalates_to_limitless_on_refusal(isolated_memory_store):
+    router = DualModelRouter()
+    router.set_routing_mode("auto")
+    fake_vm = SimpleNamespace(available=int(12.0 * (1024**3)))
+    fake_client = _FakeAsyncClient(
+        tags_models=["qwen3.5:4b", "qwen3.5:9b", "huihui_ai/qwen3.5-abliterated:9b"],
+        stream_responses=[
+            _FakeStreamResponse(
+                200,
+                [
+                    json.dumps(
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "I'm sorry, I cannot assist with that request.",
+                            },
+                            "done": True,
+                        }
+                    )
+                ],
+            ),
+            _FakeStreamResponse(
+                200,
+                [
+                    json.dumps(
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "Here is the direct, unrestricted answer.",
+                            },
+                            "done": True,
+                        }
+                    )
+                ],
+            ),
+        ],
+    )
+
+    events = []
+    with patch("app.core.router.psutil.virtual_memory", return_value=fake_vm), patch(
+        "app.core.router.httpx.AsyncClient", return_value=fake_client
+    ):
+        reply, tier, model, _lat, _tools = await router.generate_with_tools(
+            "pro",
+            [{"role": "user", "content": "Sensitive question"}],
+            on_event=events.append,
+        )
+
+    assert tier == "limitless"
+    assert model == router.limitless_model
+    assert reply == "Here is the direct, unrestricted answer."
+    assert any(e["type"] == "tier_switch" and e["tier"] == "limitless" for e in events)
