@@ -1,8 +1,11 @@
 import asyncio
 import inspect
 import json
+import os
 import re
+import subprocess
 import time
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import httpx
 import psutil
@@ -13,6 +16,24 @@ from app.tools.pc_control import is_confirm_risky_actions_enabled, set_confirm_r
 from app.tools.registry import OLLAMA_TOOLS_SCHEMA, execute_tool
 
 logger = get_logger(__name__)
+
+
+def ensure_ollama_running() -> None:
+    """Start the local Ollama daemon in the background on Windows if it is not already running."""
+    ollama_exe = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "ollama.exe"
+    if not ollama_exe.exists():
+        return
+    try:
+        out = subprocess.check_output(["tasklist", "/FI", "IMAGENAME eq ollama.exe"], text=True)
+        if "ollama.exe" not in out.lower():
+            subprocess.Popen(
+                [str(ollama_exe), "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+    except Exception:
+        pass
 
 DOMAIN_PATTERNS = {
     "finance": re.compile(

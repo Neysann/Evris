@@ -52,7 +52,7 @@ from rich.text import Text  # noqa: E402
 from app.core.agent import evris_agent, get_system_telemetry  # noqa: E402
 from app.core.logging_config import setup_logging  # noqa: E402
 from app.core.memory import memory_store  # noqa: E402
-from app.core.router import model_router  # noqa: E402
+from app.core.router import ensure_ollama_running, model_router  # noqa: E402
 from app.tools.pc_control import set_confirmation_handler  # noqa: E402
 from app.tools.registry import OLLAMA_TOOLS_SCHEMA  # noqa: E402
 
@@ -64,23 +64,6 @@ TIER_STYLES: Dict[str, str] = {
     "limitless": "magenta",
     "refused": "red",
 }
-
-
-def ensure_ollama_running() -> None:
-    ollama_exe = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "ollama.exe"
-    if not ollama_exe.exists():
-        return
-    try:
-        out = subprocess.check_output(["tasklist", "/FI", "IMAGENAME eq ollama.exe"], text=True)
-        if "ollama.exe" not in out.lower():
-            subprocess.Popen(
-                [str(ollama_exe), "serve"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-            )
-    except Exception:
-        pass
 
 
 class LiveTurnDisplay:
