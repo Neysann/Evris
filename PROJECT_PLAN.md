@@ -1,31 +1,35 @@
 # E.V.R.I.S. — Master Architecture & Implementation Plan (PC Edition)
 
-**E.V.R.I.S.** (*Environment for Voice, Robotics & Intelligent Systems*) is a 100% local, privacy-first personal AI assistant and autonomous PC agent inspired by **J.A.R.V.I.S.** from Iron Man, designed to run entirely on your computer (**Lenovo ThinkPad P16s Gen 2 — 16 GB RAM**).
+**E.V.R.I.S.** (*Environment for Voice, Robotics & Intelligent Systems*) is a 100% local, privacy-first personal AI assistant and autonomous PC agent inspired by **J.A.R.V.I.S.**, running entirely on your Windows workstation (**32 GB RAM · NVIDIA GeForce RTX 5060 Laptop GPU 8 GB VRAM · 8-core / 16-thread AMD CPU**).
 
 ---
 
-## 1. Core Vision & Dual-Model PC Architecture
+## 1. Core Vision & Multi-Model PC Architecture
 
-To get both **instant voice responsiveness** and **deep reasoning** within a **16 GB RAM** envelope on a Lenovo ThinkPad P16s Gen 2, Evris uses two local models managed by a **Complexity Router**:
+To combine **low-latency responses**, **deep domain reasoning**, and **unrestricted answers** locally on an **8 GB VRAM / 32 GB RAM** machine, Evris routes requests across three **Qwen 3.5** models via Ollama (`router.py`):
 
-1. **The "Fast" Model (`qwen2.5:1.5b-instruct` or `qwen2.5:3b-instruct`)**
-   - **RAM Footprint**: `~1.1 GB – 1.9 GB`
-   - **Role**: Default brain for 80% of interactions—voice commands, opening apps, controlling PC volume/media, timers, quick questions, and casual conversation.
-   - **Why**: Responds almost instantaneously (`< 0.3s` time-to-first-token) and uses minimal battery/CPU so it can stay loaded in RAM all day while you work.
-2. **The "Pro" Model (`qwen2.5:7b-instruct` Q4_K_M)**
-   - **RAM Footprint**: `~4.7 GB`
-   - **Role**: Activated automatically (or on command) for complex tasks—deep reasoning, coding, document analysis, summarization, and multi-step agent workflows.
-   - **Memory Guardrail (16 GB RAM Safety)**: Before loading the Pro model, Evris checks available free RAM on your PC. If your PC is running heavy apps and free memory is too low to load the 7B model safely without swapping, Evris informs you that the Pro model cannot be loaded right now.
+1. **The "Fast" Model (`qwen3.5:4b`)**
+   - **Size**: `~3.3 GB` (fits comfortably in GPU VRAM with room to spare)
+   - **Role**: Default brain for everyday conversation, quick questions, and simple PC actions (`keep_alive: 30m`, `think: false`).
+   - **Why**: Low latency and minimal resource overhead so it can stay warm in memory during normal work.
+2. **The "Pro" Model (`qwen3.5:9b`)**
+   - **Size**: `~6.6 GB` (fits inside the 8 GB RTX 5060 VRAM)
+   - **Role**: Activated automatically (by domain/complexity) or via `/mode pro` for deep reasoning across **Finance, Science, Computer Science, and Strategy**, coding, file analysis, and multi-step tool workflows (`keep_alive: 5m`).
+   - **Memory Guardrail**: Before loading a 9B model, Evris checks effective available system RAM (`pro_min_free_ram_gb = 5.5 GB`, configurable via `/ram [gb]`). If free RAM is below threshold, Evris refuses cleanly rather than forcing Windows to swap.
+3. **The "Limitless" Model (`huihui_ai/qwen3.5-abliterated:9b`)**
+   - **Size**: `~6.6 GB` (abliterated / refusal-removed Qwen 3.5 9B)
+   - **Role**: Activated explicitly via `/mode limitless` for unrestricted, uncensored responses without safety refusals, disclaimers, or moralizing, while keeping native tool calling and the same RAM safety guardrail (`keep_alive: 5m`).
 
 ---
 
-## 2. Target Hardware Sizing (Lenovo ThinkPad P16s Gen 2 — 16 GB RAM)
+## 2. Target Hardware Sizing (32 GB RAM + RTX 5060 8 GB VRAM)
 
-| Resource | Budget on 16 GB RAM | Engineering Design |
+| Resource | Budget on Workstation | Engineering Design |
 | :--- | :--- | :--- |
-| **Windows OS + Your Apps** | `~6.0 – 8.0 GB` | Leaves `8.0 – 10.0 GB` of available RAM for Evris. |
-| **Fast Model + Voice Pipeline** | `~1.8 GB` total | `qwen2.5:1.5b` (`1.1 GB`) + `Faster-Whisper int8` (`450 MB`) + `Piper TTS` (`150 MB`). Runs effortlessly in the background. |
-| **Pro Model (On-Demand)** | `~4.7 GB` (`qwen2.5:7b`) | Ollama unloads the Pro model automatically after `5 minutes` of inactivity (`keep_alive: 5m`) to free your RAM back up. |
+| **Windows OS + User Apps** | `~10.0 – 18.0 GB` RAM | Leaves `~12.0 – 20.0 GB` RAM headroom on 32 GB total memory. |
+| **GPU VRAM (RTX 5060)** | `8.0 GB` VRAM | Both `qwen3.5:4b` (`3.3 GB`) and `qwen3.5:9b` / `abliterated:9b` (`6.6 GB`) fit in VRAM for GPU-accelerated inference. |
+| **Fast Model + Voice Pipeline *(Phase 2)*** | `~3.9 GB` total | `qwen3.5:4b` (`3.3 GB`) + `Faster-Whisper int8` (`~450 MB`) + `Piper TTS` (`~150 MB`). |
+| **Heavy Models (On-Demand)** | `~6.6 GB` (`9b` / `abliterated:9b`) | Ollama auto-unloads `PRO` and `LIMITLESS` after `5 minutes` (`keep_alive: 5m`) to free VRAM/RAM when idle. |
 
 ---
 
@@ -34,91 +38,113 @@ To get both **instant voice responsiveness** and **deep reasoning** within a **1
 ```mermaid
 flowchart TB
     subgraph User["User Interfaces (On PC)"]
-        Mic["PC Microphone & Speakers (Always-On / Push-to-Talk)"]
-        WebUI["Minimalist Web HUD (TypeScript / React)"]
+        CLI["Terminal CLI (evris.py / evris.cmd)"]
+        Mic["PC Microphone & Speakers (Phase 2)"]
+        WebUI["Minimalist Web HUD — React / TypeScript (Phase 1b)"]
     end
 
-    subgraph EvrisCore["EVRIS Local Core (Python FastAPI on PC)"]
-        Wake["Wake Word (openWakeWord)"]
-        STT["Local Speech-to-Text (Faster-Whisper int8)"]
-        Router["Task Complexity Router & RAM Guard"]
-        Memory["Persistent Memory (SQLite)"]
-        Tools["PC Agent Tools (Apps, System, Files, Reminders)"]
-        TTS["Offline Voice Synthesis (Piper TTS)"]
+    subgraph EvrisCore["EVRIS Local Core (Python 3.12)"]
+        Wake["Wake Word (openWakeWord — Phase 2)"]
+        STT["Local Speech-to-Text (Faster-Whisper — Phase 2)"]
+        Agent["Agent & Persona (agent.py, persona.py)"]
+        Router["Multi-Model Router & RAM Guard (router.py)"]
+        Memory["Persistent Memory (SQLite: evris_memory.db)"]
+        Tools["Autonomous Tools (pc_control, research_tools, memory_tools)"]
+        TTS["Offline Voice Synthesis (Piper TTS — Phase 2)"]
     end
 
-    subgraph OllamaLocal["Local Ollama Engine (localhost:11434)"]
-        FastLLM["FAST Model: qwen2.5:1.5b / 3b (Instant Answers)"]
-        ProLLM["PRO Model: qwen2.5:7b (Complex Tasks)"]
+    subgraph OllamaLocal["Local Ollama Engine (127.0.0.1:11434)"]
+        FastLLM["FAST: qwen3.5:4b (3.3 GB)"]
+        ProLLM["PRO: qwen3.5:9b (6.6 GB)"]
+        LimitlessLLM["LIMITLESS: huihui_ai/qwen3.5-abliterated:9b (6.6 GB)"]
     end
 
-    Mic --> Wake --> STT --> Router
-    WebUI <-->|"WebSockets"| Router
-    Router <--> Memory
+    CLI --> Agent
+    Mic --> Wake --> STT --> Agent
+    WebUI <-->|"WebSockets"| Agent
+    Agent <--> Memory
+    Agent --> Router
 
-    Router -->|"1. Quick Command / Chat"| FastLLM
+    Router -->|"1. General / Quick"| FastLLM
+    Router -->|"2. Finance / Science / Tech / Strategy"| ProLLM
+    Router -->|"3. /mode limitless (Uncensored)"| LimitlessLLM
+
     FastLLM <--> Tools
-    FastLLM --> TTS
-
-    Router -->|"2. Complex Task (If RAM Available)"| ProLLM
     ProLLM <--> Tools
-    ProLLM --> TTS
+    LimitlessLLM <--> Tools
+    Agent --> TTS
 ```
 
-### How the Router Works (`router.py`)
-1. **Fast Path (Default)**:
-   - Short questions, PC commands (*"Open calculator"*, *"Mute volume"*, *"What's my CPU/RAM usage?"*, *"Set a reminder"*), and normal conversation are routed to the **Fast Model** for sub-second voice replies.
-2. **Pro Path (Complex Tasks)**:
-   - Triggered automatically for complex prompts (coding, debugging, long text analysis, multi-step planning) or when you explicitly ask (*"Use the Pro model..."* / *"Analyze in depth..."*).
-   - **Check**: Verifies that Ollama and sufficient system RAM are available; if not, Evris clearly tells you that the Pro model cannot be executed right now.
+### How the Router Works (`backend/app/core/router.py`)
+1. **Auto Mode (`/mode auto`, default)**:
+   - **Fast Path**: Short general prompts are routed to `qwen3.5:4b` (`think: false`) for snappy bilingual (FR/EN) replies.
+   - **Pro Path**: Triggered automatically when a domain matches (`finance`, `science`, `tech`, `strategy`) or complexity triggers/long prompts appear (`> 140` chars, code blocks, analytical keywords).
+2. **Manual Overrides**:
+   - `/mode fast` forces `qwen3.5:4b`.
+   - `/mode pro` forces `qwen3.5:9b`.
+   - `/mode limitless` forces `huihui_ai/qwen3.5-abliterated:9b` with uncensored persona framing.
+3. **Safety & Offline Guardrails**:
+   - Verifies Ollama reachability, local model installation, `/pro on|off` state, and `pro_min_free_ram_gb` (`5.5 GB`) before running `9B` models.
+   - Tool execution supports up to 3 rounds per prompt with `num_ctx: 8192` and `pro_thinking: false` by default for reliable, fast tool calling.
 
 ---
 
 ## 4. Technology Stack (100% Local on Your PC)
 
-| Layer | Technology | Rationale |
+| Layer | Technology | Status / Rationale |
 | :--- | :--- | :--- |
-| **LLM Runtime** | **Ollama** | Manages both `qwen2.5:1.5b` (Fast) and `qwen2.5:7b` (Pro) locally with automatic memory unloading (`keep_alive`). |
-| **Wake Word** | **openWakeWord** | Lets you wake Evris hands-free on your PC using `< 2%` CPU. |
-| **Speech-to-Text (STT)** | **Faster-Whisper** (`base` / `small` `int8`) | Fast, accurate offline transcription of your microphone input. |
-| **Text-to-Speech (TTS)** | **Piper TTS** | Instant, 100% offline neural voice synthesis with near-zero RAM/CPU usage. |
-| **Backend & Agent** | **Python 3.12 + FastAPI + WebSockets** | Orchestrates the Fast/Pro router, SQLite memory, voice pipeline, and PC tools. |
-| **Memory** | **SQLite** (`evris_memory.db`) | Single-file local database storing conversation history, user preferences, and reminders. |
-| **Minimalist UI** | **React + TypeScript + Vite** | Distraction-free single-screen interface: Voice Orb, Chat stream, and Active Model (`FAST` vs `PRO`) indicator. |
+| **LLM Runtime** | **Ollama** (`qwen3.5:4b`, `qwen3.5:9b`, `huihui_ai/qwen3.5-abliterated:9b`) | **Implemented.** Native tool calling, VRAM/RAM offloading, and `keep_alive` management. |
+| **Backend & Agent** | **Python 3.12 + httpx + psutil** (`FastAPI + Uvicorn` in deps) | **Core implemented** (`evris.py` CLI live; `FastAPI` WebSocket server planned). |
+| **Memory** | **SQLite** (`backend/data/evris_memory.db`) | **Implemented.** Stores conversation history and permanent user facts/preferences. |
+| **Autonomous Tools** | **PC, Research & Memory Tools** (`backend/app/tools/`) | **Implemented.** Unrestricted app launcher (PATH, Start Menu, URI, App Paths, URLs), system report, file/dir inspection, AST math, Yahoo Finance quotes, DuckDuckGo search, long-term memory. |
+| **Minimalist Web UI** | **React + TypeScript + Vite** | **Planned (Phase 1b).** Voice Orb, chat stream, and `AUTO / FAST / PRO / LIMITLESS` indicator. |
+| **Wake Word** | **openWakeWord** | **Planned (Phase 2).** Hands-free activation on PC (`< 2%` CPU). |
+| **Speech-to-Text (STT)** | **Faster-Whisper** (`int8`) | **Planned (Phase 2).** Accurate offline microphone transcription. |
+| **Text-to-Speech (TTS)** | **Piper TTS** | **Planned (Phase 2).** Fast offline neural voice synthesis. |
 
 ---
 
-## 5. Clean Repository Structure (`c:\Projets\Evris`)
+## 5. Repository Structure (`c:\Projets\Evris`)
 
 ```text
 c:\Projets\Evris\
 ├── PROJECT_PLAN.md              # Master architecture & roadmap document
-├── README.md                    # Quick-start guide
+├── README.md                    # Quick-start guide & command reference
+├── evris.py                     # Interactive Terminal CLI (REPL + slash commands)
+├── evris.cmd                    # Windows launcher shortcut
 ├── .gitignore
+│
+├── docs/
+│   └── evris-terminal.svg       # Terminal interface preview
 │
 ├── backend/                     # Python Backend & AI Core
 │   ├── requirements.txt
+│   ├── data/
+│   │   └── evris_memory.db      # SQLite conversation history & long-term memory
 │   └── app/
-│       ├── main.py              # FastAPI server & WebSocket hub
-│       ├── config.py            # Model names, RAM thresholds & voice settings
+│       ├── config.py            # Qwen 3.5 models, thinking toggle & RAM threshold
+│       ├── main.py              # [Planned] FastAPI server & WebSocket hub
 │       ├── core/
-│       │   ├── router.py        # Complexity Classifier (Fast vs. Pro + Availability Check)
-│       │   ├── agent.py         # J.A.R.V.I.S. persona, system prompt & tool execution loop
-│       │   └── memory.py        # SQLite conversation history & long-term memory
-│       ├── voice/
-│       │   ├── wakeword.py      # openWakeWord listener
-│       │   ├── stt.py           # Faster-Whisper local microphone transcription
-│       │   └── tts.py           # Piper offline neural speech synthesis
-│       └── tools/
-│           ├── pc_control.py    # Launch apps, volume/media control, CPU/RAM/Battery stats
-│           └── memory_tools.py  # Save/recall long-term facts, notes & timers
+│       │   ├── router.py        # Fast / Pro / Limitless router, RAM guard & tool loop
+│       │   ├── agent.py         # Direct pre-hooks, language priming & orchestration
+│       │   ├── persona.py       # J.A.R.V.I.S. & Limitless persona + domain prompts
+│       │   └── memory.py        # SQLite conversation history & long-term memory store
+│       ├── tools/
+│       │   ├── registry.py      # Ollama tool schemas & dispatcher (8 tools)
+│       │   ├── pc_control.py    # Unrestricted app launcher, system report, files/dirs
+│       │   ├── research_tools.py# Safe AST math, market quotes, DuckDuckGo web search
+│       │   └── memory_tools.py  # Save/list long-term facts
+│       └── voice/               # [Planned] Phase 2 local voice pipeline
+│           ├── wakeword.py      # openWakeWord listener
+│           ├── stt.py           # Faster-Whisper microphone transcription
+│           └── tts.py           # Piper offline neural speech synthesis
 │
-└── frontend/                    # Minimalist Web UI (React + TypeScript + Vite)
+└── frontend/                    # [Planned] Minimalist Web UI (React + TypeScript + Vite)
     ├── package.json
     ├── vite.config.ts
     └── src/
         ├── main.tsx
-        ├── App.tsx              # Voice orb + chat stream + Fast/Pro mode indicator
+        ├── App.tsx              # Voice orb + chat stream + mode indicator
         └── index.css
 ```
 
@@ -126,12 +152,16 @@ c:\Projets\Evris\
 
 ## 6. Step-by-Step Implementation Roadmap
 
-1. **Phase 1 — Core Brain, Fast/Pro Router & Minimalist UI**
-   - Build `backend/app/core/` (`router.py`, `agent.py`, `memory.py`) with automatic **Fast (`qwen2.5:1.5b` / `3b`)** vs. **Pro (`qwen2.5:7b`)** routing and availability checks.
-   - Build the clean, minimalist `frontend/` interface (Voice Orb + Chat + Fast/Pro selector & status).
-2. **Phase 2 — 100% Local Voice Pipeline (STT + TTS + Wake Word)**
+1. **Phase 1a — Core Brain, Multi-Model Router & Terminal CLI *(Done)***
+   - Built `backend/app/core/` (`router.py`, `agent.py`, `persona.py`, `memory.py`) with **Qwen 3.5** (`qwen3.5:4b` Fast, `qwen3.5:9b` Pro, `huihui_ai/qwen3.5-abliterated:9b` Limitless), RAM safety guardrail, and native Ollama tool calling.
+   - Built the interactive terminal interface (`evris.py` / `evris.cmd`) with `/mode`, `/pro`, `/ram`, `/memories`, `/forget`, `/tools`, `/status`, `/clear`.
+   - Implemented core tools: unrestricted `open_application`, `get_system_report`, `read_local_file`, `list_directory`, `save_memory`, `calculate_math`, `get_market_quote`, and `web_search`.
+2. **Phase 1b — FastAPI WebSocket Backend & Minimalist Web HUD *(Next)***
+   - Build `backend/app/main.py` (FastAPI + WebSocket API exposing chat, telemetry, memories, and mode switching).
+   - Build `frontend/` (React + TypeScript + Vite) with Voice Orb, live chat stream, tool execution badges, and `FAST / PRO / LIMITLESS` status indicator.
+3. **Phase 2 — 100% Local Voice Pipeline (STT + TTS + Wake Word)**
    - Integrate `Faster-Whisper` (microphone transcription), `Piper TTS` (offline voice output), and `openWakeWord` (hands-free activation).
-3. **Phase 3 — PC Control & Autonomous Agent Tools**
-   - Add real PC tools in `backend/app/tools/`: opening/closing applications, system volume/media control, reading/summarizing local files, timers, and persistent memory commands.
-4. **Phase 4 — Future Expansion (Optional Raspberry Pi Satellite)**
-   - Because the Fast and Pro models are cleanly separated in `router.py`, moving the Fast model to a dedicated Raspberry Pi in the future will only require changing one URL in `config.py`.
+4. **Phase 3 — Extended PC Control & Automation Tools**
+   - Add system volume/media controls, active timers/reminders, and guarded file/command workflows in `backend/app/tools/`.
+5. **Phase 4 — Future Expansion (Optional Raspberry Pi Satellite)**
+   - Because `fast_model`, `pro_model`, and `limitless_model` are cleanly decoupled in `router.py`, offloading a lightweight voice/Fast node to a Raspberry Pi later only requires pointing to a remote endpoint in `config.py`.
